@@ -90,7 +90,8 @@ class DataTest {
         // Inverse rate
         val usdEur = rateTable.rate(CurrencyCode("USD"), CurrencyCode("EUR"))
         assertNotNull(usdEur)
-        assertEquals(java.math.BigDecimal("1").divide(java.math.BigDecimal("1.0850"), 10, java.math.RoundingMode.HALF_UP), usdEur!!)
+        val expectedUsdEur = java.math.BigDecimal("1").divide(java.math.BigDecimal("1.0850"), 10, java.math.RoundingMode.HALF_UP)
+        assertEquals(expectedUsdEur, usdEur!!.setScale(10, java.math.RoundingMode.HALF_UP))
         
         // Cross rate through USD
         val eurJpy = rateTable.rate(CurrencyCode("EUR"), CurrencyCode("JPY"))
@@ -105,7 +106,7 @@ class DataTest {
         val instrument = Instrument.forex("EURUSD")
         
         assertEquals("EURUSD", instrument.symbol)
-        assertEquals(AssetClass.FOREX, instrument.assetClass)
+        assertEquals(app.marketbrief.core.risk.AssetClass.FOREX, instrument.assetClass)
         assertEquals(CurrencyCode("USD"), instrument.quoteCurrency)
         assertEquals(CurrencyCode("EUR"), instrument.baseCurrency)
         assertEquals(java.math.BigDecimal("0.0001"), instrument.pipSize)

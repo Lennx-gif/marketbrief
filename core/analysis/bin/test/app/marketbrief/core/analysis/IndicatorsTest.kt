@@ -43,7 +43,7 @@ class IndicatorsTest {
         val sma = Indicators.sma(candles, 3)
         assertNotNull(sma)
         // Last 3 closes: 12, 13, 14 -> average = 13
-        assertEquals(BigDecimal("13"), sma!!.setScale(2, RoundingMode.HALF_UP))
+        assertEquals(BigDecimal("13.00"), sma!!.setScale(2, RoundingMode.HALF_UP))
     }
 
     @Test
@@ -192,12 +192,12 @@ class IndicatorsTest {
         assertNotNull(pivots["S3"])
         
         // PP = (H + L + C) / 3 = (110 + 100 + 105) / 3 = 105
-        assertEquals(BigDecimal("105"), pivots["PP"]!!.setScale(2, RoundingMode.HALF_UP))
+        assertEquals(BigDecimal("105.00"), pivots["PP"]!!.setScale(2, RoundingMode.HALF_UP))
         
         // R1 = 2*PP - L = 210 - 100 = 110
-        assertEquals(BigDecimal("110"), pivots["R1"]!!.setScale(2, RoundingMode.HALF_UP))
+        assertEquals(BigDecimal("110.00"), pivots["R1"]!!.setScale(2, RoundingMode.HALF_UP))
         
         // S1 = 2*PP - H = 210 - 110 = 100
-        assertEquals(BigDecimal("100"), pivots["S1"]!!.setScale(2, RoundingMode.HALF_UP))
+        assertEquals(BigDecimal("100.00"), pivots["S1"]!!.setScale(2, RoundingMode.HALF_UP))
     }
 }
