@@ -2,6 +2,7 @@
 # Copy this file to local.properties and fill in your API keys
 
 # News API keys
+NEWSAPI_KEY=your_newsapi_key_here
 FINNHUB_API_KEY=your_finnhub_key_here
 MARKETAUX_API_KEY=your_marketaux_key_here
 TWELVE_DATA_API_KEY=your_twelvedata_key_here

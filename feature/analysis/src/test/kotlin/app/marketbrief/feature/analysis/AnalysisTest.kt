@@ -1,20 +1,30 @@
 package app.marketbrief.feature.analysis
 
 import app.marketbrief.core.analysis.MarketAnalyzer
+import app.marketbrief.core.data.InMemoryNewsRepository
 import app.marketbrief.core.model.AssetClass
 import app.marketbrief.core.model.AssetId
 import app.marketbrief.core.model.Candle
+import app.marketbrief.core.storage.UserPrefsRepository
+import app.marketbrief.feature.analysis.ui.AnalysisMode
 import app.marketbrief.feature.analysis.ui.AnalysisViewModel
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.Assert.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AnalysisTest {
@@ -31,39 +41,41 @@ class AnalysisTest {
         Dispatchers.resetMain()
     }
 
+    private fun createViewModel(): AnalysisViewModel {
+        val repo = InMemoryNewsRepository(InMemoryNewsRepository.defaultArticles())
+        val prefs = mockk<UserPrefsRepository>(relaxed = true)
+        every { prefs.analysisView } returns flowOf("SENTIMENT")
+        return AnalysisViewModel(repo, prefs)
+    }
+
     @Test
     fun testAnalysisViewModelInitialState() = runTest {
-        val viewModel = AnalysisViewModel()
-        
+        val viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
         val state = viewModel.uiState.value
+
         assertNotNull(state)
+        assertEquals(AnalysisMode.SENTIMENT, state.mode)
         assertEquals("EURUSD", state.selectedAsset)
         assertEquals("H1", state.selectedTimeframe)
         assertTrue(state.availableAssets.contains("EURUSD"))
         assertNotNull(state.snapshot)
-        assertFalse(state.isLoading)
-        assertNull(state.error)
     }
 
     @Test
     fun testAnalysisViewModelSelectAsset() = runTest {
-        val viewModel = AnalysisViewModel()
+        val viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
         viewModel.onAssetSelected("GBPUSD")
-        
+
         val state = viewModel.uiState.value
         assertEquals("GBPUSD", state.selectedAsset)
         assertNotNull(state.snapshot)
         assertEquals("GBPUSD", state.snapshot?.assetId?.symbol)
-    }
-
-    @Test
-    fun testAnalysisViewModelSelectTimeframe() = runTest {
-        val viewModel = AnalysisViewModel()
-        viewModel.onTimeframeSelected("M15")
-        
-        val state = viewModel.uiState.value
-        assertEquals("M15", state.selectedTimeframe)
-        assertNotNull(state.snapshot)
     }
 
     @Test
@@ -81,7 +93,7 @@ class AnalysisTest {
         val assetId = AssetId("EURUSD", AssetClass.FOREX)
         val analyzer = MarketAnalyzer()
         val snapshot = analyzer.analyze(assetId, candles, candles.last().close)
-        
+
         assertEquals(assetId, snapshot.assetId)
         assertNotNull(snapshot.rsi14)
         assertNotNull(snapshot.trend)

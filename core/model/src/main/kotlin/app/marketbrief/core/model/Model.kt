@@ -96,6 +96,65 @@ data class Quote(
 }
 
 /**
+ * Feed category filters.
+ */
+@Serializable
+enum class Category(val label: String) {
+    All("All"),
+    Saved("Saved"),
+    Trade("Trade"),
+    Finance("Finance"),
+    Forex("Forex"),
+    Tech("Tech"),
+    Politics("Politics"),
+    Stocks("Stocks"),
+    Crypto("Crypto"),
+    Commodities("Commodities")
+}
+
+/**
+ * Country filter selection for headlines.
+ */
+@Serializable
+sealed interface CountryFilter {
+    @Serializable
+    data object Home : CountryFilter
+
+    @Serializable
+    data object Global : CountryFilter
+
+    @Serializable
+    data class Only(val isoCodes: Set<String>) : CountryFilter
+}
+
+/**
+ * Query criteria for the reactive news feed.
+ */
+@Serializable
+data class FeedQuery(
+    val categories: Set<Category> = setOf(Category.All),
+    val country: CountryFilter = CountryFilter.Home,
+) {
+    fun toggle(c: Category): FeedQuery = when {
+        c == Category.Saved -> copy(categories = setOf(Category.Saved))
+        c == Category.All -> copy(categories = setOf(Category.All))
+        Category.Saved in categories -> copy(categories = setOf(c))
+        c in categories -> copy(categories = (categories - c).ifEmpty { setOf(Category.All) })
+        else -> copy(categories = (categories - Category.All) + c)
+    }
+}
+
+/**
+ * Sentiment evaluation for an asset or headline.
+ */
+@Serializable
+data class Sentiment(
+    val score: Float, // -1.0 to +1.0
+    val label: String, // Bullish, Bearish, Neutral
+    val headlineCount: Int = 0
+)
+
+/**
  * News article model.
  */
 @Serializable
@@ -104,10 +163,12 @@ data class Article(
     val title: String,
     val summary: String,
     val url: String,
-    val imageUrl: String?,
+    val imageUrl: String? = null,
     val sourceId: String,
     val sourceName: String,
     val publishedAt: Long,
     val categories: List<String> = emptyList(),
-    val relatedSymbols: List<String> = emptyList()
+    val relatedSymbols: List<String> = emptyList(),
+    val region: String? = null,
+    val sentiment: Float? = null
 )

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -8,12 +10,20 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+val newsApiKey = localProperties.getProperty("NEWSAPI_KEY") ?: ""
+
 android {
     namespace = "app.marketbrief"
     compileSdk = 34
+
     kotlin {
-    jvmToolchain(17)
-}
+        jvmToolchain(17)
+    }
 
     defaultConfig {
         applicationId = "app.marketbrief"
@@ -25,6 +35,8 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        buildConfigField("String", "NEWSAPI_KEY", "\"$newsApiKey\"")
     }
 
     buildTypes {
@@ -55,12 +67,11 @@ android {
         kotlinCompilerExtensionVersion = "2.0.21"
     }
 
-        packaging {
+    packaging {
         resources {
             excludes += "META-INF/*"
         }
     }
-    
 }
 
 dependencies {
@@ -69,17 +80,20 @@ dependencies {
     implementation(project(":core:analysis"))
     implementation(project(":core:entitlements"))
     implementation(project(":core:data"))
+    implementation(project(":core:storage"))
     implementation(project(":core:ui"))
     implementation(project(":feature:news"))
     implementation(project(":feature:calculator"))
     implementation(project(":feature:analysis"))
     implementation(project(":feature:watchlist"))
-    
+    implementation(project(":feature:settings"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.compose.bom)
+    implementation(libs.androidx.browser)
+    implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
@@ -90,9 +104,10 @@ dependencies {
     implementation(libs.workmanager.runtime)
     implementation(libs.datastore.preferences)
     implementation(libs.coil.compose)
+    implementation(libs.ktor.client.core)
     implementation("androidx.appcompat:appcompat:1.7.0")
     kapt(libs.hilt.compiler)
-    
+
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
@@ -108,3 +123,7 @@ kapt {
     correctErrorTypes = true
 }
 
+tasks.withType<org.jetbrains.kotlin.gradle.internal.KaptWithoutKotlincTask>().configureEach {
+    kaptProcessJvmArgs.add("-Djava.io.tmpdir=C:/Users/mysti/AppData/Local/Temp")
+    kaptProcessJvmArgs.add("-Dorg.sqlite.tmpdir=C:/Users/mysti/AppData/Local/Temp")
+}

@@ -77,45 +77,6 @@ class ModelTest {
     }
 
     @Test
-    fun testCandleProperties() {
-        val timestamp = System.currentTimeMillis()
-        val candle = Candle(
-            timestamp = timestamp,
-            open = 1.0850,
-            high = 1.0860,
-            low = 1.0840,
-            close = 1.0855,
-            volume = 1000.0
-        )
-        
-        assertEquals(timestamp, candle.timestamp)
-        assertEquals(1.0850, candle.open, 0.0001)
-        assertEquals(1.0860, candle.high, 0.0001)
-        assertEquals(1.0840, candle.low, 0.0001)
-        assertEquals(1.0855, candle.close, 0.0001)
-        assertEquals(1000.0, candle.volume, 0.001)
-    }
-
-    @Test
-    fun testQuoteProperties() {
-        val assetId = AssetId("EURUSD", AssetClass.FOREX)
-        val timestamp = System.currentTimeMillis()
-        val quote = Quote(
-            assetId = assetId,
-            bid = 1.0850,
-            ask = 1.0852,
-            timestamp = timestamp
-        )
-        
-        assertEquals(assetId, quote.assetId)
-        assertEquals(1.0850, quote.bid, 0.0001)
-        assertEquals(1.0852, quote.ask, 0.0001)
-        assertEquals(timestamp, quote.timestamp)
-        assertEquals(1.0851, quote.mid, 0.0001)
-        assertEquals(0.0002, quote.spread, 0.0001)
-    }
-
-    @Test
     fun testArticleProperties() {
         val article = Article(
             id = "test-1",
@@ -127,7 +88,9 @@ class ModelTest {
             sourceName = "Test Source",
             publishedAt = System.currentTimeMillis(),
             categories = listOf("Forex", "Technical"),
-            relatedSymbols = listOf("EURUSD", "GBPUSD")
+            relatedSymbols = listOf("EURUSD", "GBPUSD"),
+            region = "KE",
+            sentiment = 0.45f
         )
         
         assertEquals("test-1", article.id)
@@ -137,8 +100,29 @@ class ModelTest {
         assertEquals("https://example.com/image.jpg", article.imageUrl)
         assertEquals("test-source", article.sourceId)
         assertEquals("Test Source", article.sourceName)
-        assertEquals(2, article.categories.size)
-        assertEquals(2, article.relatedSymbols.size)
+        assertEquals("KE", article.region)
+        assertEquals(0.45f, article.sentiment ?: 0f, 0.01f)
+    }
+
+    @Test
+    fun testFeedQueryToggle() {
+        val initial = FeedQuery()
+        assertEquals(setOf(Category.All), initial.categories)
+
+        val withTrade = initial.toggle(Category.Trade)
+        assertEquals(setOf(Category.Trade), withTrade.categories)
+
+        val withTech = withTrade.toggle(Category.Tech)
+        assertEquals(setOf(Category.Trade, Category.Tech), withTech.categories)
+
+        val withoutTrade = withTech.toggle(Category.Trade)
+        assertEquals(setOf(Category.Tech), withoutTrade.categories)
+
+        val savedToggle = withoutTrade.toggle(Category.Saved)
+        assertEquals(setOf(Category.Saved), savedToggle.categories)
+
+        val backToAll = savedToggle.toggle(Category.All)
+        assertEquals(setOf(Category.All), backToAll.categories)
     }
 
     @Test

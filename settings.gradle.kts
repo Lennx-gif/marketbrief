@@ -23,6 +23,7 @@ include(":core:risk")
 include(":core:analysis")
 include(":core:entitlements")
 include(":core:data")
+include(":core:storage")
 include(":core:ui")
 
 // Feature modules
@@ -30,6 +31,8 @@ include(":feature:news")
 include(":feature:calculator")
 include(":feature:analysis")
 include(":feature:watchlist")
+include(":feature:settings")
 
 // App module
 include(":app")
+

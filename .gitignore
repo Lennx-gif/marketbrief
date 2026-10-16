@@ -4,3 +4,10 @@ local.properties
 .idea/
 *.iml
 .DS_Store
+
+# Kotlin & compiled binaries
+.kotlin/
+*.log
+bin/
+*/bin/
+**/bin/

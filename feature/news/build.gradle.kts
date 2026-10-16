@@ -26,28 +26,33 @@ android {
     }
 
     kotlin {
-    jvmToolchain(17)
-}
+        jvmToolchain(17)
+    }
 }
 
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:data"))
+    implementation(project(":core:storage"))
     implementation(project(":core:ui"))
     implementation(project(":core:entitlements"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.compose.bom)
+    implementation(libs.androidx.browser)
+    implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
     implementation(libs.navigation.compose)
+
     implementation(libs.hilt.android)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.coil.compose)
     kapt(libs.hilt.compiler)
+
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)

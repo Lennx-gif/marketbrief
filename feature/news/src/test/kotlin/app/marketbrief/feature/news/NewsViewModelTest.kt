@@ -1,18 +1,32 @@
 package app.marketbrief.feature.news
 
-import app.marketbrief.core.model.Article
+import app.marketbrief.core.data.InMemoryNewsRepository
 import app.marketbrief.core.entitlements.Plan
+import app.marketbrief.core.entitlements.PlanSource
+import app.marketbrief.core.model.Article
+import app.marketbrief.core.model.Category
+import app.marketbrief.core.storage.UserPrefsRepository
+import app.marketbrief.feature.news.ui.FeedAction
 import app.marketbrief.feature.news.ui.NewsViewModel
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.Assert.*
+
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewsViewModelTest {
@@ -31,37 +45,46 @@ class NewsViewModelTest {
 
     @Test
     fun testInitialState() = runTest {
-        val repository = app.marketbrief.core.data.InMemoryNewsRepository(emptyList())
-        val planSource = object : app.marketbrief.core.entitlements.PlanSource {
+        val repository = InMemoryNewsRepository(emptyList())
+        val prefs = mockk<UserPrefsRepository>(relaxed = true)
+        every { prefs.homeCountry } returns flowOf("Kenya")
+        every { prefs.dailyBudgetUsed } returns flowOf(0)
+
+        val planSource = object : PlanSource {
             override val plan: Plan = Plan.PERSONAL
         }
-        val viewModel = NewsViewModel(repository, planSource)
-        
+
+        val viewModel = NewsViewModel(repository, prefs, planSource)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+
         val state = viewModel.uiState.value
         assertNotNull(state)
         assertTrue(state.articles.isEmpty())
-        assertFalse(state.isLoading)
-        assertNull(state.error)
+        assertNull(state.banner)
+        assertEquals("Kenya", state.homeCountryName)
     }
 
     @Test
-    fun testArticleCreation() {
-        val article = Article(
-            id = "test-1",
-            title = "EURUSD Breaks Resistance",
-            summary = "Technical analysis shows EURUSD breaking key resistance at 1.0900",
-            url = "https://example.com/article",
-            imageUrl = "https://example.com/image.jpg",
-            sourceId = "forex-factory",
-            sourceName = "Forex Factory",
-            publishedAt = System.currentTimeMillis(),
-            categories = listOf("Forex", "Technical Analysis"),
-            relatedSymbols = listOf("EURUSD", "EURJPY")
-        )
-        
-        assertEquals("test-1", article.id)
-        assertEquals("EURUSD Breaks Resistance", article.title)
-        assertEquals(2, article.categories.size)
-        assertEquals(2, article.relatedSymbols.size)
+    fun testCategoryToggle() = runTest {
+        val repository = InMemoryNewsRepository(InMemoryNewsRepository.defaultArticles())
+        val prefs = mockk<UserPrefsRepository>(relaxed = true)
+        every { prefs.homeCountry } returns flowOf("Kenya")
+        every { prefs.dailyBudgetUsed } returns flowOf(0)
+
+        val planSource = object : PlanSource {
+            override val plan: Plan = Plan.PERSONAL
+        }
+
+        val viewModel = NewsViewModel(repository, prefs, planSource)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+
+        viewModel.onAction(FeedAction.ToggleCategory(Category.Trade))
+
+        val state = viewModel.uiState.value
+        assertTrue("Trade category should be selected", Category.Trade in state.selectedCategories)
     }
 }

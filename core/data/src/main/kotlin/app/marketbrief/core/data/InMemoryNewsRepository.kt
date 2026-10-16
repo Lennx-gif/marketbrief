@@ -1,13 +1,17 @@
 package app.marketbrief.core.data
 
 import app.marketbrief.core.model.Article
+import app.marketbrief.core.model.Category
+import app.marketbrief.core.model.CountryFilter
+import app.marketbrief.core.model.FeedQuery
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
 /**
- * In-memory implementation of NewsRepository with pre-populated market news.
+ * In-memory implementation of NewsRepository with pre-populated market news and full reactive contract.
  */
 class InMemoryNewsRepository(
     initialArticles: List<Article> = defaultArticles()
@@ -15,32 +19,49 @@ class InMemoryNewsRepository(
 
     private val allArticles = initialArticles.toMutableList()
     private val _articles = MutableStateFlow<List<Article>>(initialArticles)
-    override val articles: Flow<List<Article>> = _articles.asStateFlow()
+    private val _bookmarkedIds = MutableStateFlow<Set<String>>(emptySet())
+    private val _downloadedIds = MutableStateFlow<Set<String>>(emptySet())
 
-    private val _savedArticles = MutableStateFlow<List<Article>>(emptyList())
-    override val savedArticles: Flow<List<Article>> = _savedArticles.asStateFlow()
-
-    override suspend fun refresh(category: String?) {
-        if (category.isNullOrBlank() || category.equals("All", ignoreCase = true)) {
-            _articles.value = allArticles.toList()
-        } else {
-            val filtered = allArticles.filter { article ->
-                article.categories.any { it.equals(category, ignoreCase = true) }
+    override fun observeFeed(query: FeedQuery): Flow<List<Article>> = _articles.map { list ->
+        var filtered = list
+        if (Category.Saved in query.categories) {
+            val saved = _bookmarkedIds.value
+            return@map filtered.filter { it.id in saved }
+        }
+        if (Category.All !in query.categories) {
+            val catLabels = query.categories.map { it.label }
+            filtered = filtered.filter { article ->
+                article.categories.any { cat -> catLabels.any { it.equals(cat, ignoreCase = true) } }
             }
-            _articles.value = if (filtered.isNotEmpty()) filtered else allArticles.toList()
+        }
+        when (val country = query.country) {
+            is CountryFilter.Home -> {
+                // Return articles prioritizing home region
+                filtered.sortedByDescending { it.region == "KE" }
+            }
+            is CountryFilter.Global -> filtered
+            is CountryFilter.Only -> filtered.filter { it.region in country.isoCodes }
         }
     }
 
-    override suspend fun saveArticle(article: Article) {
-        _savedArticles.update { current ->
-            if (current.none { it.id == article.id }) current + article else current
+    override fun observeBookmarkIds(): Flow<Set<String>> = _bookmarkedIds.asStateFlow()
+
+    override fun observeDownloadedIds(): Flow<Set<String>> = _downloadedIds.asStateFlow()
+
+    override suspend fun refresh(query: FeedQuery): RefreshResult {
+        // Simulates successful refresh
+        return RefreshResult.Success(_articles.value.size)
+    }
+
+    override suspend fun setBookmarked(articleId: String, saved: Boolean) {
+        _bookmarkedIds.update { current ->
+            if (saved) current + articleId else current - articleId
         }
     }
 
-    override suspend fun unsaveArticle(articleId: String) {
-        _savedArticles.update { current ->
-            current.filter { it.id != articleId }
-        }
+    override suspend fun download(articleId: String): DownloadResult {
+        _downloadedIds.update { it + articleId }
+        return DownloadResult.Success(articleId, isFullText = true)
     }
 
     override suspend fun search(query: String): List<Article> {
@@ -48,7 +69,7 @@ class InMemoryNewsRepository(
         if (q.isEmpty()) return _articles.value
         return allArticles.filter {
             it.title.lowercase().contains(q) ||
-            (it.summary?.lowercase()?.contains(q) == true) ||
+            it.summary.lowercase().contains(q) ||
             it.relatedSymbols.any { sym -> sym.lowercase().contains(q) }
         }
     }
@@ -67,7 +88,9 @@ class InMemoryNewsRepository(
                     sourceName = "Reuters",
                     publishedAt = now - 1000 * 60 * 25,
                     categories = listOf("Finance", "Macro", "Forex"),
-                    relatedSymbols = listOf("EURUSD", "USDJPY", "US30")
+                    relatedSymbols = listOf("EURUSD", "USDJPY", "US30"),
+                    region = "US",
+                    sentiment = 0.25f
                 ),
                 Article(
                     id = "news-2",
@@ -79,7 +102,9 @@ class InMemoryNewsRepository(
                     sourceName = "Bloomberg",
                     publishedAt = now - 1000 * 60 * 75,
                     categories = listOf("Tech", "AI", "Stocks"),
-                    relatedSymbols = listOf("SPX500")
+                    relatedSymbols = listOf("SPX500"),
+                    region = "US",
+                    sentiment = 0.65f
                 ),
                 Article(
                     id = "news-3",
@@ -90,8 +115,10 @@ class InMemoryNewsRepository(
                     sourceId = "marketwatch",
                     sourceName = "MarketWatch",
                     publishedAt = now - 1000 * 60 * 120,
-                    categories = listOf("Finance", "Forex"),
-                    relatedSymbols = listOf("XAUUSD")
+                    categories = listOf("Finance", "Forex", "Commodities"),
+                    relatedSymbols = listOf("XAUUSD"),
+                    region = "Global",
+                    sentiment = 0.70f
                 ),
                 Article(
                     id = "news-4",
@@ -103,19 +130,23 @@ class InMemoryNewsRepository(
                     sourceName = "CoinDesk",
                     publishedAt = now - 1000 * 60 * 210,
                     categories = listOf("Crypto", "Finance"),
-                    relatedSymbols = listOf("BTCUSD", "ETHUSD")
+                    relatedSymbols = listOf("BTCUSD", "ETHUSD"),
+                    region = "Global",
+                    sentiment = 0.35f
                 ),
                 Article(
                     id = "news-5",
-                    title = "AI Startup Funding Surges as Seed Valuations Defy Broader Slowdown",
-                    summary = "Venture investments in autonomous coding agents, foundation model optimization, and synthetic media tooling captured the majority of early-stage software funding.",
-                    url = "https://example.com/startup-ai",
+                    title = "Kenya Trade Balance Strengthens on Robust Agricultural and Tea Exports",
+                    summary = "East Africa commercial flows recorded notable surplus driven by strong European and Gulf market demand for premium specialty tea, coffee, and horticultural products.",
+                    url = "https://example.com/kenya-trade",
                     imageUrl = null,
-                    sourceId = "techcrunch",
-                    sourceName = "TechCrunch",
+                    sourceId = "businessdaily",
+                    sourceName = "Business Daily",
                     publishedAt = now - 1000 * 60 * 330,
-                    categories = listOf("Tech", "Startups", "AI"),
-                    relatedSymbols = emptyList()
+                    categories = listOf("Trade", "Finance"),
+                    relatedSymbols = listOf("KES"),
+                    region = "KE",
+                    sentiment = 0.60f
                 )
             )
         }
