@@ -51,11 +51,16 @@ object StorageModule {
     fun provideDownloadDao(database: MarketBriefDatabase): DownloadDao = database.downloadDao()
 
     @Provides
+    fun provideArticleBodyDao(database: MarketBriefDatabase): app.marketbrief.core.storage.db.ArticleBodyDao =
+        database.articleBodyDao()
+
+    @Provides
     @Singleton
     fun provideNewsRepository(
         articleDao: ArticleDao,
         bookmarkDao: BookmarkDao,
         downloadDao: DownloadDao,
+        articleBodyDao: app.marketbrief.core.storage.db.ArticleBodyDao,
         provider: NewsProvider,
         prefs: UserPrefsRepository
     ): NewsRepository {
@@ -63,6 +68,7 @@ object StorageModule {
             articleDao = articleDao,
             bookmarkDao = bookmarkDao,
             downloadDao = downloadDao,
+            articleBodyDao = articleBodyDao,
             provider = provider,
             prefs = prefs
         )

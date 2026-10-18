@@ -41,7 +41,13 @@ class AssetTagger {
             "ethereum" to "ETH", "eth" to "ETH",
 
             // Equities & Indices
-            "sp500" to "SPX500", "s&p" to "SPX500", "wall street" to "US30", "nasdaq" to "NAS100"
+            "sp500" to "SPX500", "s&p" to "SPX500", "wall street" to "US30", "nasdaq" to "NAS100",
+            "apple" to "AAPL", "aapl" to "AAPL",
+            "microsoft" to "MSFT", "msft" to "MSFT",
+            "nvidia" to "NVDA", "nvda" to "NVDA",
+            "tesla" to "TSLA", "tsla" to "TSLA",
+            "amazon" to "AMZN", "amzn" to "AMZN",
+            "google" to "GOOGL", "alphabet" to "GOOGL", "googl" to "GOOGL"
         )
     }
 }

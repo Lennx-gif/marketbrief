@@ -54,6 +54,9 @@ interface NewsRepository {
     suspend fun setBookmarked(articleId: String, saved: Boolean)
     suspend fun download(articleId: String): DownloadResult
     suspend fun search(query: String): List<Article>
+    fun observeArticleBody(articleId: String): Flow<app.marketbrief.core.model.ArticleBody?>
+    suspend fun getArticleBody(articleId: String): app.marketbrief.core.model.ArticleBody?
+    suspend fun extractArticleBody(articleId: String): Result<app.marketbrief.core.model.ArticleBody>
 
     // Compatibility default delegates
     val articles: Flow<List<Article>>

@@ -133,7 +133,7 @@ sealed interface CountryFilter {
 @Serializable
 data class FeedQuery(
     val categories: Set<Category> = setOf(Category.All),
-    val country: CountryFilter = CountryFilter.Home,
+    val country: CountryFilter = CountryFilter.Global,
 ) {
     fun toggle(c: Category): FeedQuery = when {
         c == Category.Saved -> copy(categories = setOf(Category.Saved))
@@ -171,4 +171,17 @@ data class Article(
     val relatedSymbols: List<String> = emptyList(),
     val region: String? = null,
     val sentiment: Float? = null
+)
+
+/**
+ * Scraped and parsed full article content in Markdown format.
+ */
+@Serializable
+data class ArticleBody(
+    val articleId: String,
+    val markdown: String,
+    val kind: String = "FULL", // "FULL", "FEED", "PREVIEW"
+    val wordCount: Int = 0,
+    val extractedAt: Long = 0L,
+    val failureReason: String? = null
 )

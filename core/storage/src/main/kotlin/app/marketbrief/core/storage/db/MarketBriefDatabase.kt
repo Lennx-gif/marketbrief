@@ -7,13 +7,15 @@ import androidx.room.RoomDatabase
     entities = [
         ArticleEntity::class,
         BookmarkEntity::class,
-        DownloadEntity::class
+        DownloadEntity::class,
+        ArticleBodyEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class MarketBriefDatabase : RoomDatabase() {
     abstract fun articleDao(): ArticleDao
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun downloadDao(): DownloadDao
+    abstract fun articleBodyDao(): ArticleBodyDao
 }

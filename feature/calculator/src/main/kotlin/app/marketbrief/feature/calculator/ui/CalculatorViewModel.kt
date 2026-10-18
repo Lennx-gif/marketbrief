@@ -29,31 +29,13 @@ class CalculatorViewModel @Inject constructor() : ViewModel() {
     private val _uiState = MutableStateFlow(CalculatorUiState())
     val uiState: StateFlow<CalculatorUiState> = _uiState
 
-    private val allInstruments = listOf(
-        Instrument.forex("EURUSD"),
-        Instrument.forex("GBPUSD"),
-        Instrument.forex("USDJPY"),
-        Instrument.forex("USDCHF"),
-        Instrument.forex("USDCAD"),
-        Instrument.forex("AUDUSD"),
-        Instrument.forex("NZDUSD"),
-        Instrument.forex("EURGBP"),
-        Instrument.forex("EURJPY"),
-        Instrument.forex("GBPJPY"),
-        Instrument(
-            symbol = "XAUUSD",
-            assetClass = AssetClass.METAL,
-            quoteCurrency = CurrencyCode("USD"),
-            baseCurrency = CurrencyCode("XAU"),
-            pipSize = BigDecimal("0.1"),
-            contractSize = BigDecimal("100")
-        )
-    )
+    private val allInstruments = app.marketbrief.core.risk.InstrumentCatalog.default().all()
 
     init {
         _uiState.update { it.copy(availableInstruments = allInstruments) }
-        if (allInstruments.isNotEmpty()) {
-            onInstrumentSelected(allInstruments.first().symbol)
+        val defaultInst = allInstruments.find { it.symbol == "EURUSD" } ?: allInstruments.firstOrNull()
+        if (defaultInst != null) {
+            onInstrumentSelected(defaultInst.symbol)
         }
     }
 

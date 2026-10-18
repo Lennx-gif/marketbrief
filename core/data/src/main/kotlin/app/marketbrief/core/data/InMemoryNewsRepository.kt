@@ -74,6 +74,28 @@ class InMemoryNewsRepository(
         }
     }
 
+    private val _articleBodies = MutableStateFlow<Map<String, app.marketbrief.core.model.ArticleBody>>(emptyMap())
+
+    override fun observeArticleBody(articleId: String): Flow<app.marketbrief.core.model.ArticleBody?> =
+        _articleBodies.map { it[articleId] }
+
+    override suspend fun getArticleBody(articleId: String): app.marketbrief.core.model.ArticleBody? =
+        _articleBodies.value[articleId]
+
+    override suspend fun extractArticleBody(articleId: String): Result<app.marketbrief.core.model.ArticleBody> {
+        val article = allArticles.find { it.id == articleId }
+            ?: return Result.failure(IllegalArgumentException("Article not found: $articleId"))
+        val body = app.marketbrief.core.model.ArticleBody(
+            articleId = articleId,
+            markdown = "# ${article.title}\n\n${article.summary}\n\n*Simulated article content for offline testing.*",
+            kind = "FULL",
+            wordCount = 120,
+            extractedAt = System.currentTimeMillis()
+        )
+        _articleBodies.update { it + (articleId to body) }
+        return Result.success(body)
+    }
+
     companion object {
         fun defaultArticles(): List<Article> {
             val now = System.currentTimeMillis()

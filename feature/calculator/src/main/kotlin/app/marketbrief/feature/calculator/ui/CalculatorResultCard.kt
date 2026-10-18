@@ -6,65 +6,67 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.marketbrief.core.risk.SizingResult
 import app.marketbrief.core.risk.SizingWarning
+import app.marketbrief.core.ui.components.AppleGroupedSection
+import app.marketbrief.core.ui.components.AppleHairlineDivider
+import app.marketbrief.core.ui.theme.MarketBriefTheme
 
 @Composable
 fun CalculatorResultCard(result: SizingResult) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
-    ) {
+    AppleGroupedSection {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "Position Size Result",
-                fontSize = 18.sp,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "SIZING RESULT",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "${result.lots.toPlainString()} Lots",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            AppleHairlineDivider()
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                ResultItem("Lots", result.lots.toPlainString())
-                ResultItem("Units", result.units.toPlainString())
+                ResultItem("Contract Units", result.units.toPlainString())
+                ResultItem("Target Risk", "${result.targetRisk.toPlainString()} (${result.actualRiskPercent.toPlainString()}%)")
             }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                ResultItem("Target Risk", "${result.targetRisk.toPlainString()} ${result.targetRisk.scale()}")
-                ResultItem("Actual Risk", "${result.actualRisk.toPlainString()} (${result.actualRiskPercent.toPlainString()}%)")
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                ResultItem("Stop Price", result.stopPrice.toPlainString())
-                ResultItem("Stop Pips", result.stopPips.toPlainString())
+                ResultItem("Stop Loss Price", result.stopPrice.toPlainString())
+                ResultItem("Stop Distance", "${result.stopPips.toPlainString()} pips")
             }
 
             result.takeProfitPrice?.let { tpPrice ->
@@ -72,8 +74,8 @@ fun CalculatorResultCard(result: SizingResult) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    ResultItem("TP Price", tpPrice.toPlainString())
-                    ResultItem("TP Pips", result.takeProfitPips?.toPlainString() ?: "N/A")
+                    ResultItem("Take Profit Price", tpPrice.toPlainString())
+                    ResultItem("TP Distance", "${result.takeProfitPips?.toPlainString() ?: "N/A"} pips")
                 }
             }
 
@@ -81,8 +83,8 @@ fun CalculatorResultCard(result: SizingResult) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                ResultItem("Pip Value/Lot", result.pipValuePerLot.toPlainString())
-                ResultItem("R:R Ratio", result.rewardRisk?.toPlainString() ?: "N/A")
+                ResultItem("Pip Value / Lot", result.pipValuePerLot.toPlainString())
+                ResultItem("Reward : Risk", result.rewardRisk?.toPlainString()?.let { "1 : $it" } ?: "N/A")
             }
 
             result.potentialProfit?.let { profit ->
@@ -96,7 +98,8 @@ fun CalculatorResultCard(result: SizingResult) {
             }
 
             if (result.warnings.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                AppleHairlineDivider()
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     result.warnings.forEach { warning ->
                         WarningRow(warning)
                     }
@@ -116,9 +119,10 @@ fun ResultItem(label: String, value: String) {
         )
         Text(
             text = value,
-            fontSize = 16.sp,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onPrimaryContainer
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 2.dp)
         )
     }
 }
@@ -130,7 +134,7 @@ fun WarningRow(warning: SizingWarning) {
         is SizingWarning.CappedAtMaxLot -> "Capped at max lot: ${warning.maxLot.toPlainString()}"
     }
     val color = when (warning) {
-        is SizingWarning.HighRisk -> MaterialTheme.colorScheme.error
+        is SizingWarning.HighRisk -> MarketBriefTheme.colors.bearish
         is SizingWarning.CappedAtMaxLot -> MaterialTheme.colorScheme.tertiary
     }
 
@@ -141,13 +145,15 @@ fun WarningRow(warning: SizingWarning) {
         Icon(
             imageVector = Icons.Default.Warning,
             contentDescription = "Warning",
-            tint = color
+            tint = color,
+            modifier = Modifier.size(16.dp)
         )
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = message,
             fontSize = 12.sp,
-            color = color
+            color = color,
+            fontWeight = FontWeight.Medium
         )
     }
 }

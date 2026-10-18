@@ -62,3 +62,19 @@ interface DownloadDao {
     @Query("DELETE FROM downloads WHERE articleId = :articleId")
     suspend fun deleteDownload(articleId: String)
 }
+
+@Dao
+interface ArticleBodyDao {
+
+    @Query("SELECT * FROM article_body WHERE articleId = :articleId")
+    fun observeBody(articleId: String): Flow<ArticleBodyEntity?>
+
+    @Query("SELECT * FROM article_body WHERE articleId = :articleId")
+    suspend fun getBody(articleId: String): ArticleBodyEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBody(body: ArticleBodyEntity)
+
+    @Query("DELETE FROM article_body WHERE articleId = :articleId")
+    suspend fun deleteBody(articleId: String)
+}

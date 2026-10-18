@@ -196,25 +196,31 @@ fun SettingsScreen(
             item {
                 SettingsSectionHeader(title = "ANALYSIS VIEW")
                 AppleGroupedSection {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Display Mode",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            AppleSegmentedControl(
-                                items = listOf("SENTIMENT", "BOTH"),
-                                selectedItem = uiState.analysisView,
-                                onItemSelected = { viewModel.setAnalysisView(it) },
-                                labelProvider = { if (it == "SENTIMENT") "Sentiment Only" else "Sentiment & Volume" }
-                            )
-                        }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Display Mode",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Choose whether to display sentiment gauges exclusively or combine with headline volume statistics in the analysis tab.",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        AppleSegmentedControl(
+                            items = listOf("SENTIMENT", "BOTH"),
+                            selectedItem = uiState.analysisView,
+                            onItemSelected = { viewModel.setAnalysisView(it) },
+                            labelProvider = { if (it == "SENTIMENT") "Sentiment Only" else "Sentiment & Volume" },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             }

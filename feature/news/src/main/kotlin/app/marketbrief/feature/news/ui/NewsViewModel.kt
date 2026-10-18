@@ -42,7 +42,7 @@ data class ArticleUi(
 data class FeedUiState(
     val articles: List<ArticleUi> = emptyList(),
     val selectedCategories: Set<Category> = setOf(Category.All),
-    val country: CountryFilter = CountryFilter.Home,
+    val country: CountryFilter = CountryFilter.Global,
     val homeCountryName: String = "Kenya",
     val isRefreshing: Boolean = false,
     val banner: Banner? = null

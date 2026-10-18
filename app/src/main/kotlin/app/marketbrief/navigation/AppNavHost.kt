@@ -39,6 +39,7 @@ interface AppNavHostEntryPoint {
     fun articleDao(): ArticleDao
     fun bookmarkDao(): BookmarkDao
     fun downloadDao(): DownloadDao
+    fun newsRepository(): app.marketbrief.core.data.NewsRepository
 }
 
 @Composable
@@ -111,6 +112,7 @@ fun AppNavHost(
                     articleDao = entryPoint.articleDao(),
                     bookmarkDao = entryPoint.bookmarkDao(),
                     downloadDao = entryPoint.downloadDao(),
+                    newsRepository = entryPoint.newsRepository(),
                     onBack = { navController.popBackStack() },
                     onSizeTrade = { symbol ->
                         navController.navigate("calculator?symbol=$symbol")
@@ -139,7 +141,11 @@ fun AppNavHost(
                 AnalysisScreen()
             }
             composable("watchlist") {
-                WatchlistScreen()
+                WatchlistScreen(
+                    onNavigateToCalculator = { symbol ->
+                        navController.navigate("calculator?symbol=$symbol")
+                    }
+                )
             }
         }
     }

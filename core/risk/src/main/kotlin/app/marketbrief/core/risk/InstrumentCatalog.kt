@@ -44,8 +44,31 @@ class InstrumentCatalog private constructor(private val bySymbol: Map<String, In
             contractSize = BigDecimal("100"),
         )
 
+        private val STOCKS = listOf(
+            Instrument.stock("AAPL"),
+            Instrument.stock("MSFT"),
+            Instrument.stock("NVDA"),
+            Instrument.stock("TSLA"),
+            Instrument.stock("AMZN"),
+            Instrument.stock("GOOGL"),
+        )
+
+        private val INDICES = listOf(
+            Instrument.index("SPX500"),
+            Instrument.index("US30"),
+            Instrument.index("NAS100"),
+        )
+
+        private val CRYPTO = listOf(
+            Instrument.crypto("BTCUSD", baseCurrency = "BTC"),
+            Instrument.crypto("ETHUSD", baseCurrency = "ETH"),
+        )
+
         fun default(): InstrumentCatalog =
-            InstrumentCatalog((FOREX_SYMBOLS.map { Instrument.forex(it) } + GOLD).associateBy { it.symbol })
+            InstrumentCatalog(
+                (FOREX_SYMBOLS.map { Instrument.forex(it) } + GOLD + STOCKS + INDICES + CRYPTO)
+                    .associateBy { it.symbol }
+            )
 
         fun empty(): InstrumentCatalog = InstrumentCatalog(emptyMap())
     }

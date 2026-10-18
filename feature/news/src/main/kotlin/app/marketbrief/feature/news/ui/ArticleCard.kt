@@ -69,6 +69,7 @@ fun ArticleCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
+                    modifier = Modifier.weight(1f, fill = false),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -91,6 +92,9 @@ fun ArticleCard(
                         text = article.sourceName,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
@@ -103,9 +107,12 @@ fun ArticleCard(
                     Text(
                         text = formatRelativeTime(article.publishedAt),
                         fontSize = 12.sp,
+                        maxLines = 1,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -120,6 +127,8 @@ fun ArticleCard(
                                 text = region,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
@@ -147,6 +156,8 @@ fun ArticleCard(
                                 text = label,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
                                 color = sentimentColor,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )

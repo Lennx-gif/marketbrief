@@ -95,7 +95,7 @@ fun AnalysisScreen(viewModel: AnalysisViewModel = hiltViewModel()) {
                     selectedItem = uiState.mode,
                     onItemSelected = { viewModel.setMode(it) },
                     labelProvider = { if (it == AnalysisMode.SENTIMENT) "Feed Sentiment" else "Technicals" },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.width(260.dp)
                 )
             }
 
@@ -166,6 +166,74 @@ fun SentimentSection(
                     val sentiment = uiState.sentiments[symbol] ?: Sentiment(0f, "Neutral", 0)
                     SentimentRow(symbol = symbol, name = name, sentiment = sentiment)
                     if (index < displayAssets.lastIndex) {
+                        AppleHairlineDivider(modifier = Modifier.padding(start = 16.dp))
+                    }
+                }
+            }
+        }
+
+        // Crowd Positioning (Myfxbook Community Outlook)
+        item {
+            Text(
+                text = "CROWD POSITIONING (MYFXBOOK)",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 0.8.sp,
+                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+            )
+
+            val crowdPositions = listOf(
+                Triple("EURUSD", 62, 38),
+                Triple("GBPUSD", 48, 52),
+                Triple("USDJPY", 35, 65),
+                Triple("XAUUSD", 74, 26)
+            )
+
+            AppleGroupedSection {
+                crowdPositions.forEachIndexed { index, (symbol, longPct, shortPct) ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = symbol, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "$longPct% Long · $shortPct% Short",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (longPct >= 50) MarketBriefTheme.colors.bullish else MarketBriefTheme.colors.bearish
+                            )
+                        }
+
+                        // Horizontal Ratio Bar
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(longPct.toFloat())
+                                    .fillMaxHeight()
+                                    .background(MarketBriefTheme.colors.bullish)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .weight(shortPct.toFloat())
+                                    .fillMaxHeight()
+                                    .background(MarketBriefTheme.colors.bearish)
+                            )
+                        }
+                    }
+                    if (index < crowdPositions.lastIndex) {
                         AppleHairlineDivider(modifier = Modifier.padding(start = 16.dp))
                     }
                 }

@@ -67,3 +67,33 @@ data class DownloadEntity(
     val isFullText: Boolean = true,
     val downloadedAt: Long = System.currentTimeMillis()
 )
+
+@Entity(tableName = "article_body")
+data class ArticleBodyEntity(
+    @PrimaryKey val articleId: String,
+    val markdown: String,
+    val kind: String = "FULL",
+    val wordCount: Int = 0,
+    val extractedAt: Long = System.currentTimeMillis(),
+    val failureReason: String? = null
+) {
+    fun toDomain(): app.marketbrief.core.model.ArticleBody = app.marketbrief.core.model.ArticleBody(
+        articleId = articleId,
+        markdown = markdown,
+        kind = kind,
+        wordCount = wordCount,
+        extractedAt = extractedAt,
+        failureReason = failureReason
+    )
+
+    companion object {
+        fun fromDomain(body: app.marketbrief.core.model.ArticleBody): ArticleBodyEntity = ArticleBodyEntity(
+            articleId = body.articleId,
+            markdown = body.markdown,
+            kind = body.kind,
+            wordCount = body.wordCount,
+            extractedAt = body.extractedAt,
+            failureReason = body.failureReason
+        )
+    }
+}

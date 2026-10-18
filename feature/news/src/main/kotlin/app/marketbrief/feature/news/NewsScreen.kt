@@ -195,8 +195,16 @@ fun FeedHeader(
                     letterSpacing = (-0.8).sp,
                     color = MaterialTheme.colorScheme.onBackground
                 )
+                val subtitle = when (countryFilter) {
+                    is CountryFilter.Global -> "Global Financial Intelligence"
+                    is CountryFilter.Home -> "$homeCountry Trade & Macro"
+                    is CountryFilter.Only -> {
+                        val names = countryFilter.isoCodes.joinToString(", ")
+                        "$names Intelligence"
+                    }
+                }
                 Text(
-                    text = if (countryFilter is CountryFilter.Home) "$homeCountry Trade & Macro" else "Global Financial Intelligence",
+                    text = subtitle,
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -224,18 +232,45 @@ fun FeedHeader(
             }
         }
 
-        // Home / Global Segment Control
-        Row(
+        // Multi-location selection with Global as the default
+        val activeCountries = when (countryFilter) {
+            is CountryFilter.Only -> countryFilter.isoCodes
+            is CountryFilter.Home -> setOf(homeCountry)
+            is CountryFilter.Global -> emptySet()
+        }
+        val isGlobal = countryFilter is CountryFilter.Global
+        val locationOptions = listOf("Global", homeCountry, "United States", "United Kingdom", "Eurozone", "Japan")
+
+        LazyRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            AppleSegmentedControl(
-                items = listOf(CountryFilter.Home, CountryFilter.Global),
-                selectedItem = countryFilter,
-                onItemSelected = onCountryFilterSelected,
-                labelProvider = { if (it is CountryFilter.Home) homeCountry else "Global" }
-            )
+            item {
+                ApplePillChip(
+                    text = "Global",
+                    isSelected = isGlobal,
+                    onClick = { onCountryFilterSelected(CountryFilter.Global) }
+                )
+            }
+            items(locationOptions.filter { it != "Global" }) { loc ->
+                val isSelected = loc in activeCountries
+                ApplePillChip(
+                    text = loc,
+                    isSelected = isSelected,
+                    onClick = {
+                        val next = if (isSelected) {
+                            activeCountries - loc
+                        } else {
+                            activeCountries + loc
+                        }
+                        if (next.isEmpty()) {
+                            onCountryFilterSelected(CountryFilter.Global)
+                        } else {
+                            onCountryFilterSelected(CountryFilter.Only(next))
+                        }
+                    }
+                )
+            }
         }
     }
 }

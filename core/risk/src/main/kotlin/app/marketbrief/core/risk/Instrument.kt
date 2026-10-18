@@ -75,5 +75,75 @@ data class Instrument(
                 maxLot = maxLot,
             )
         }
+
+        fun stock(
+            symbol: String,
+            quoteCurrency: String = "USD",
+            contractSize: BigDecimal = BigDecimal("1"),
+            pipSize: BigDecimal = BigDecimal("0.01"),
+            lotStep: BigDecimal = BigDecimal("1"),
+            minLot: BigDecimal = BigDecimal("1"),
+            maxLot: BigDecimal = BigDecimal("100000"),
+        ): Instrument {
+            val cleanSymbol = symbol.filter { it.isLetterOrDigit() }.uppercase()
+            return Instrument(
+                symbol = cleanSymbol,
+                assetClass = AssetClass.STOCK,
+                quoteCurrency = CurrencyCode(quoteCurrency),
+                baseCurrency = null,
+                pipSize = pipSize,
+                contractSize = contractSize,
+                lotStep = lotStep,
+                minLot = minLot,
+                maxLot = maxLot,
+            )
+        }
+
+        fun index(
+            symbol: String,
+            quoteCurrency: String = "USD",
+            contractSize: BigDecimal = BigDecimal("1"),
+            pipSize: BigDecimal = BigDecimal("1.0"),
+            lotStep: BigDecimal = BigDecimal("0.1"),
+            minLot: BigDecimal = BigDecimal("0.1"),
+            maxLot: BigDecimal = BigDecimal("1000"),
+        ): Instrument {
+            val cleanSymbol = symbol.filter { it.isLetterOrDigit() }.uppercase()
+            return Instrument(
+                symbol = cleanSymbol,
+                assetClass = AssetClass.INDEX,
+                quoteCurrency = CurrencyCode(quoteCurrency),
+                baseCurrency = null,
+                pipSize = pipSize,
+                contractSize = contractSize,
+                lotStep = lotStep,
+                minLot = minLot,
+                maxLot = maxLot,
+            )
+        }
+
+        fun crypto(
+            symbol: String,
+            baseCurrency: String,
+            quoteCurrency: String = "USD",
+            contractSize: BigDecimal = BigDecimal("1"),
+            pipSize: BigDecimal = BigDecimal("1.0"),
+            lotStep: BigDecimal = BigDecimal("0.01"),
+            minLot: BigDecimal = BigDecimal("0.01"),
+            maxLot: BigDecimal = BigDecimal("500"),
+        ): Instrument {
+            val cleanSymbol = symbol.filter { it.isLetterOrDigit() }.uppercase()
+            return Instrument(
+                symbol = cleanSymbol,
+                assetClass = AssetClass.CRYPTO,
+                quoteCurrency = CurrencyCode(quoteCurrency),
+                baseCurrency = CurrencyCode(baseCurrency),
+                pipSize = pipSize,
+                contractSize = contractSize,
+                lotStep = lotStep,
+                minLot = minLot,
+                maxLot = maxLot,
+            )
+        }
     }
 }

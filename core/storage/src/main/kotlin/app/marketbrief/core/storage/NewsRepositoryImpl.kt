@@ -1,5 +1,7 @@
 package app.marketbrief.core.storage
 
+import app.marketbrief.core.analysis.sentiment.AssetTagger
+import app.marketbrief.core.analysis.sentiment.CategoryClassifier
 import app.marketbrief.core.analysis.sentiment.SentimentScorer
 import app.marketbrief.core.data.DownloadResult
 import app.marketbrief.core.data.NewsProvider
@@ -9,9 +11,12 @@ import app.marketbrief.core.data.remote.NewsApiException
 import app.marketbrief.core.data.remote.NewsError
 import app.marketbrief.core.data.remote.NewsQueries
 import app.marketbrief.core.model.Article
+import app.marketbrief.core.model.ArticleBody
 import app.marketbrief.core.model.Category
 import app.marketbrief.core.model.CountryFilter
 import app.marketbrief.core.model.FeedQuery
+import app.marketbrief.core.storage.db.ArticleBodyDao
+import app.marketbrief.core.storage.db.ArticleBodyEntity
 import app.marketbrief.core.storage.db.ArticleDao
 import app.marketbrief.core.storage.db.ArticleEntity
 import app.marketbrief.core.storage.db.BookmarkDao
@@ -24,7 +29,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import org.jsoup.Jsoup
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,9 +37,13 @@ class NewsRepositoryImpl @Inject constructor(
     private val articleDao: ArticleDao,
     private val bookmarkDao: BookmarkDao,
     private val downloadDao: DownloadDao,
+    private val articleBodyDao: ArticleBodyDao,
     private val provider: NewsProvider,
     private val prefs: UserPrefsRepository,
-    private val scorer: SentimentScorer = SentimentScorer()
+    private val scorer: SentimentScorer = SentimentScorer(),
+    private val classifier: CategoryClassifier = CategoryClassifier(),
+    private val tagger: AssetTagger = AssetTagger(),
+    private val extractor: ArticleExtractor = ArticleExtractor()
 ) : NewsRepository {
 
     override fun observeFeed(query: FeedQuery): Flow<List<Article>> {
@@ -61,15 +69,19 @@ class NewsRepositoryImpl @Inject constructor(
 
             when (val countryFilter = query.country) {
                 is CountryFilter.Home -> {
-                    // Prioritize home country
                     rankArticles(filtered, homeCountry)
                 }
                 is CountryFilter.Global -> {
                     rankArticles(filtered, null)
                 }
                 is CountryFilter.Only -> {
-                    val subset = filtered.filter { it.region in countryFilter.isoCodes }
-                    rankArticles(subset, null)
+                    val subset = filtered.filter { article ->
+                        countryFilter.isoCodes.any { code ->
+                            article.region?.equals(code, ignoreCase = true) == true ||
+                            article.title.contains(code, ignoreCase = true)
+                        }
+                    }
+                    rankArticles(if (subset.isNotEmpty()) subset else filtered, null)
                 }
             }
         }
@@ -80,6 +92,26 @@ class NewsRepositoryImpl @Inject constructor(
 
     override fun observeDownloadedIds(): Flow<Set<String>> =
         downloadDao.observeDownloadedIds().map { it.toSet() }
+
+    override fun observeArticleBody(articleId: String): Flow<ArticleBody?> =
+        articleBodyDao.observeBody(articleId).map { it?.toDomain() }
+
+    override suspend fun getArticleBody(articleId: String): ArticleBody? = withContext(Dispatchers.IO) {
+        articleBodyDao.getBody(articleId)?.toDomain()
+    }
+
+    override suspend fun extractArticleBody(articleId: String): Result<ArticleBody> = withContext(Dispatchers.IO) {
+        val cached = articleBodyDao.getBody(articleId)
+        if (cached != null && (cached.kind == "FULL" || cached.failureReason != null)) {
+            return@withContext Result.success(cached.toDomain())
+        }
+        val articleEntity = articleDao.getById(articleId)
+            ?: return@withContext Result.failure(IllegalStateException("Article not found in cache: $articleId"))
+
+        val body = extractor.extractFromUrl(articleEntity.toDomain())
+        articleBodyDao.insertBody(ArticleBodyEntity.fromDomain(body))
+        Result.success(body)
+    }
 
     override suspend fun refresh(query: FeedQuery): RefreshResult = withContext(Dispatchers.IO) {
         if (!prefs.canMakeRequest(1)) {
@@ -94,8 +126,19 @@ class NewsRepositoryImpl @Inject constructor(
             onSuccess = { articles ->
                 val scoredEntities = articles.map { article ->
                     val score = article.sentiment ?: scorer.score("${article.title} ${article.summary}")
-                    val scoredArticle = article.copy(sentiment = score)
-                    ArticleEntity.fromDomain(scoredArticle)
+                    val autoCategories = if (article.categories.isEmpty()) {
+                        classifier.classify(article.title, article.summary).map { it.label }
+                    } else article.categories
+                    val autoSymbols = if (article.relatedSymbols.isEmpty()) {
+                        tagger.tag("${article.title} ${article.summary}").toList()
+                    } else article.relatedSymbols
+
+                    val enrichedArticle = article.copy(
+                        sentiment = score,
+                        categories = autoCategories,
+                        relatedSymbols = autoSymbols
+                    )
+                    ArticleEntity.fromDomain(enrichedArticle)
                 }
 
                 articleDao.insertArticles(scoredEntities)
@@ -127,28 +170,21 @@ class NewsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun download(articleId: String): DownloadResult = withContext(Dispatchers.IO) {
-        val article = articleDao.getById(articleId) ?: return@withContext DownloadResult.Failure("Article not found in cache")
-        var isFullText = false
-        var body = article.summary
+        val articleEntity = articleDao.getById(articleId)
+            ?: return@withContext DownloadResult.Failure("Article not found in cache")
+        val article = articleEntity.toDomain()
 
-        try {
-            val doc = Jsoup.connect(article.url)
-                .userAgent("Mozilla/5.0 (Android; Mobile) MarketBrief/1.0")
-                .timeout(7000)
-                .get()
+        val body = extractor.extractFromUrl(article)
+        articleBodyDao.insertBody(ArticleBodyEntity.fromDomain(body))
+        downloadDao.insertDownload(
+            DownloadEntity(
+                articleId = articleId,
+                bodyText = body.markdown,
+                isFullText = (body.kind == "FULL")
+            )
+        )
 
-            val paragraphs = doc.select("article p, .article-body p, p").map { it.text().trim() }.filter { it.length > 40 }
-            if (paragraphs.isNotEmpty()) {
-                body = paragraphs.joinToString("\n\n")
-                isFullText = true
-            }
-        } catch (_: Exception) {
-            // Fall back to article summary
-            isFullText = false
-        }
-
-        downloadDao.insertDownload(DownloadEntity(articleId = articleId, bodyText = body, isFullText = isFullText))
-        DownloadResult.Success(articleId = articleId, isFullText = isFullText)
+        DownloadResult.Success(articleId = articleId, isFullText = (body.kind == "FULL"))
     }
 
     override suspend fun search(query: String): List<Article> = withContext(Dispatchers.IO) {
@@ -183,6 +219,11 @@ class NewsRepositoryImpl @Inject constructor(
         return when {
             cat != null -> NewsQueries.forCategory(cat) to null
             query.country is CountryFilter.Home -> NewsQueries.homeTrade(homeCountry) to homeCountry
+            query.country is CountryFilter.Only -> {
+                val countries = (query.country as CountryFilter.Only).isoCodes
+                val firstCountry = countries.firstOrNull() ?: homeCountry
+                NewsQueries.homeTrade(firstCountry) to firstCountry
+            }
             else -> NewsQueries.forCategory(Category.Finance) to null
         }
     }
