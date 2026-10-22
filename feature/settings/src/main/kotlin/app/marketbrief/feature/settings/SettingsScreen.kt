@@ -22,7 +22,10 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -35,6 +38,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +65,17 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showMyfxbookDialog by remember { mutableStateOf(false) }
+
+    if (showMyfxbookDialog) {
+        MyfxbookLoginDialog(
+            onDismiss = { showMyfxbookDialog = false },
+            onConnect = { email, password ->
+                viewModel.connectMyfxbook(email, password)
+                showMyfxbookDialog = false
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -297,6 +316,50 @@ fun SettingsScreen(
                 }
             }
 
+            // Crowd positioning account
+            item {
+                SettingsSectionHeader(title = "CROWD POSITIONING")
+                AppleGroupedSection {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Myfxbook",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (uiState.myfxbookConnected) "Connected" else "Not connected",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(
+                                enabled = !uiState.myfxbookBusy,
+                                onClick = {
+                                    if (uiState.myfxbookConnected) viewModel.disconnectMyfxbook()
+                                    else showMyfxbookDialog = true
+                                }
+                            ) { Text(if (uiState.myfxbookConnected) "Disconnect" else "Connect") }
+                        }
+                        uiState.myfxbookMessage?.let {
+                            Text(text = it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                        }
+                        Text(
+                            text = "Shows what other Myfxbook traders hold (long vs short). Your password is stored encrypted on this device and used only to sign in to Myfxbook.",
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
             // Section 5: Appearance
             item {
                 SettingsSectionHeader(title = "APPEARANCE")
@@ -370,5 +433,35 @@ fun SettingsSectionHeader(title: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         letterSpacing = 0.8.sp,
         modifier = Modifier.padding(start = 12.dp, bottom = 6.dp)
+    )
+}
+
+
+@Composable
+private fun MyfxbookLoginDialog(onDismiss: () -> Unit, onConnect: (String, String) -> Unit) {
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by remember { mutableStateOf("") } // not saveable on purpose: never written to saved state
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Connect Myfxbook") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Email") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Password") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation()
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConnect(email, password) }) { Text("Connect") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }

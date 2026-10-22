@@ -16,6 +16,7 @@ if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
 val newsApiKey = localProperties.getProperty("NEWSAPI_KEY") ?: ""
+val twelveDataKey = localProperties.getProperty("TWELVE_DATA_API_KEY") ?: localProperties.getProperty("TWELVE_DATA") ?: ""
 
 android {
     namespace = "app.marketbrief"
@@ -37,6 +38,7 @@ android {
         }
 
         buildConfigField("String", "NEWSAPI_KEY", "\"$newsApiKey\"")
+        buildConfigField("String", "TWELVE_DATA_API_KEY", "\"$twelveDataKey\"")
     }
 
     buildTypes {

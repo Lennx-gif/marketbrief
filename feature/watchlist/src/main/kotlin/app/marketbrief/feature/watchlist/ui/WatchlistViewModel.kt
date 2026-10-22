@@ -1,16 +1,22 @@
 package app.marketbrief.feature.watchlist.ui
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import app.marketbrief.core.data.MarketDataRepository
 import app.marketbrief.core.model.AssetClass
+import app.marketbrief.core.model.AssetId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import javax.inject.Inject
 
 @HiltViewModel
-class WatchlistViewModel @Inject constructor() : ViewModel() {
+class WatchlistViewModel @Inject constructor(
+    private val marketData: MarketDataRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WatchlistUiState())
     val uiState: StateFlow<WatchlistUiState> = _uiState
@@ -19,19 +25,50 @@ class WatchlistViewModel @Inject constructor() : ViewModel() {
         _uiState.update {
             it.copy(
                 watchlistItems = listOf(
-                    WatchlistItem("EURUSD", "Euro / US Dollar", AssetClass.FOREX, BigDecimal("1.0850"), 0.32, true),
-                    WatchlistItem("GBPUSD", "British Pound / US Dollar", AssetClass.FOREX, BigDecimal("1.2650"), -0.18, false),
-                    WatchlistItem("XAUUSD", "Spot Gold", AssetClass.COMMODITY, BigDecimal("2645.20"), 0.84, true),
-                    WatchlistItem("AAPL", "Apple Inc.", AssetClass.STOCK, BigDecimal("228.50"), 1.15, true),
-                    WatchlistItem("BTCUSD", "Bitcoin", AssetClass.CRYPTO, BigDecimal("68420.00"), 2.40, true)
+                    WatchlistItem("EURUSD", "Euro / US Dollar", AssetClass.FOREX, null),
+                    WatchlistItem("GBPUSD", "British Pound / US Dollar", AssetClass.FOREX, null),
+                    WatchlistItem("XAUUSD", "Spot Gold", AssetClass.COMMODITY, null),
+                    WatchlistItem("AAPL", "Apple Inc.", AssetClass.STOCK, null),
+                    WatchlistItem("BTCUSD", "Bitcoin", AssetClass.CRYPTO, null)
                 ),
-                economicEvents = listOf(
+                economicEvents = listOf(  // Sample schedule: no calendar provider is connected yet.
                     EconomicEvent("US Non-Farm Payrolls", "USD", "12:30 UTC", "High"),
                     EconomicEvent("ECB Interest Rate Decision", "EUR", "13:45 UTC", "High"),
                     EconomicEvent("UK CPI (YoY)", "GBP", "07:00 UTC", "Medium"),
                     EconomicEvent("US Initial Jobless Claims", "USD", "13:30 UTC", "Medium")
                 )
             )
+        }
+    }
+
+    init {
+        viewModelScope.launch {
+            marketData.quotes.collect { quotes ->
+                _uiState.update { state ->
+                    state.copy(
+                        watchlistItems = state.watchlistItems.map { item ->
+                            val q = quotes[AssetId(item.symbol, item.assetClass)] ?: return@map item
+                            val change = q.changePercent ?: 0.0
+                            item.copy(
+                                currentPrice = BigDecimal.valueOf(q.mid),
+                                changePercent = change,
+                                isBullish = change >= 0.0
+                            )
+                        }
+                    )
+                }
+            }
+        }
+        refresh()
+    }
+
+    /** Fetches live prices. Costs one Twelve Data credit per symbol; cached quotes are reused for two minutes. */
+    fun refresh() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+            val ids = _uiState.value.watchlistItems.map { AssetId(it.symbol, it.assetClass) }
+            marketData.refreshQuotes(ids)
+            _uiState.update { it.copy(isRefreshing = false) }
         }
     }
 
@@ -84,6 +121,7 @@ class WatchlistViewModel @Inject constructor() : ViewModel() {
             isBullish = true
         )
         _uiState.update { it.copy(watchlistItems = it.watchlistItems + newItem) }
+        viewModelScope.launch { marketData.getQuote(AssetId(symbol, assetClass)) }
     }
 
     fun removeItem(symbol: String) {
@@ -93,7 +131,8 @@ class WatchlistViewModel @Inject constructor() : ViewModel() {
 
 data class WatchlistUiState(
     val watchlistItems: List<WatchlistItem> = emptyList(),
-    val economicEvents: List<EconomicEvent> = emptyList()
+    val economicEvents: List<EconomicEvent> = emptyList(),
+    val isRefreshing: Boolean = false
 )
 
 data class WatchlistItem(

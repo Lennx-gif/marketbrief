@@ -51,5 +51,9 @@ interface MarketDataRepository {
     ): Result<List<Candle>>
     
     suspend fun getQuote(assetId: AssetId): Result<Quote>
+
+    /** Fetches fresh quotes for [ids] into [quotes], respecting cache freshness and the provider budget. */
+    suspend fun refreshQuotes(ids: Collection<AssetId>)
+
     suspend fun searchSymbols(query: String): Result<List<AssetId>>
 }

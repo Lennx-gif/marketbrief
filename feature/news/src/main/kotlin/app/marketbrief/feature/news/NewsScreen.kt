@@ -57,6 +57,9 @@ import app.marketbrief.core.ui.theme.MarketBriefTheme
 import app.marketbrief.feature.news.ui.ArticleCard
 import app.marketbrief.feature.news.ui.FeedAction
 import app.marketbrief.feature.news.ui.FeedEvent
+import app.marketbrief.feature.news.ui.SectionHeader
+import app.marketbrief.feature.news.ui.SourceStrip
+import app.marketbrief.feature.news.ui.TrendingHeroCard
 import app.marketbrief.feature.news.ui.NewsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -130,16 +133,37 @@ fun NewsScreen(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = 8.dp,
-                            bottom = 24.dp
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 8.dp, bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        val hero = uiState.articles.first()
+                        val rest = uiState.articles.drop(1)
+                        val shareArticle: (app.marketbrief.core.model.Article) -> Unit = { article ->
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, article.title)
+                                putExtra(Intent.EXTRA_TEXT, "${article.title}\n${article.url}")
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Share Article"))
+                        }
+
+                        item(key = "sources") {
+                            SourceStrip(sources = uiState.articles.map { it.article.sourceName }.distinct().take(12))
+                        }
+                        item(key = "trending-header") { SectionHeader(title = "Today trending \uD83D\uDD25") }
+                        item(key = "hero") {
+                            TrendingHeroCard(
+                                article = hero.article,
+                                isBookmarked = hero.bookmarked,
+                                onClick = { onOpenArticle(hero.article.id) },
+                                onBookmarkToggle = { viewModel.onAction(FeedAction.ToggleBookmark(hero.article)) }
+                            )
+                        }
+                        if (rest.isNotEmpty()) {
+                            item(key = "latest-header") { SectionHeader(title = "Latest news") }
+                        }
                         items(
-                            items = uiState.articles,
+                            items = rest,
                             key = { it.article.id }
                         ) { item ->
                             ArticleCard(
@@ -150,14 +174,7 @@ fun NewsScreen(
                                 onBookmarkToggle = { viewModel.onAction(FeedAction.ToggleBookmark(item.article)) },
                                 onDownload = { viewModel.onAction(FeedAction.Download(item.article.id)) },
                                 onSizeTrade = { symbol -> onNavigateToCalculator(symbol) },
-                                onShare = {
-                                    val intent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(Intent.EXTRA_SUBJECT, item.article.title)
-                                        putExtra(Intent.EXTRA_TEXT, "${item.article.title}\n${item.article.url}")
-                                    }
-                                    context.startActivity(Intent.createChooser(intent, "Share Article"))
-                                }
+                                onShare = { shareArticle(item.article) }
                             )
                         }
                     }
@@ -190,7 +207,7 @@ fun FeedHeader(
             Column {
                 Text(
                     text = "MarketBrief",
-                    fontSize = 32.sp,
+                    fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.8).sp,
                     color = MaterialTheme.colorScheme.onBackground

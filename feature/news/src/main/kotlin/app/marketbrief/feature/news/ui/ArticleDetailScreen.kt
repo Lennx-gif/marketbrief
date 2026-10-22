@@ -9,6 +9,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -58,6 +59,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -135,7 +137,13 @@ fun ArticleDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {},
+                title = {
+                    Text(
+                        text = currentArticle?.sourceName.orEmpty(),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -237,9 +245,33 @@ fun ArticleDetailScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Full-bleed header image, like the reference
+                currentArticle.imageUrl?.takeIf { it.isNotBlank() }?.let { imageUrl ->
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(4f / 3f),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                // Headline first, then the byline row
+                Text(
+                    text = currentArticle.title,
+                    fontSize = 26.sp,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Black,
+                    lineHeight = 33.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
                 // Publisher & Meta Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -306,29 +338,6 @@ fun ArticleDetailScreen(
                             )
                         }
                     }
-                }
-
-                // Headline (Apple Editorial Typography)
-                Text(
-                    text = currentArticle.title,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.6).sp,
-                    lineHeight = 31.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                // Optional Hero Image
-                currentArticle.imageUrl?.takeIf { it.isNotBlank() }?.let { imageUrl ->
-                    AsyncImage(
-                        model = imageUrl,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(210.dp)
-                            .clip(RoundedCornerShape(14.dp)),
-                        contentScale = ContentScale.Crop
-                    )
                 }
 
                 AppleHairlineDivider()
@@ -446,6 +455,7 @@ fun ArticleDetailScreen(
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
+                }
             }
         }
     }

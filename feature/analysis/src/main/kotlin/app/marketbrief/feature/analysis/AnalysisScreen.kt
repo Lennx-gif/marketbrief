@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +65,9 @@ import java.math.RoundingMode
 @Composable
 fun AnalysisScreen(viewModel: AnalysisViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Cheap when the cache is fresh; picks up a Myfxbook connection made in Settings.
+    LaunchedEffect(Unit) { viewModel.refreshCrowd() }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
@@ -173,72 +177,7 @@ fun SentimentSection(
         }
 
         // Crowd Positioning (Myfxbook Community Outlook)
-        item {
-            Text(
-                text = "CROWD POSITIONING (MYFXBOOK)",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                letterSpacing = 0.8.sp,
-                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-            )
-
-            val crowdPositions = listOf(
-                Triple("EURUSD", 62, 38),
-                Triple("GBPUSD", 48, 52),
-                Triple("USDJPY", 35, 65),
-                Triple("XAUUSD", 74, 26)
-            )
-
-            AppleGroupedSection {
-                crowdPositions.forEachIndexed { index, (symbol, longPct, shortPct) ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = symbol, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                text = "$longPct% Long · $shortPct% Short",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (longPct >= 50) MarketBriefTheme.colors.bullish else MarketBriefTheme.colors.bearish
-                            )
-                        }
-
-                        // Horizontal Ratio Bar
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .weight(longPct.toFloat())
-                                    .fillMaxHeight()
-                                    .background(MarketBriefTheme.colors.bullish)
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .weight(shortPct.toFloat())
-                                    .fillMaxHeight()
-                                    .background(MarketBriefTheme.colors.bearish)
-                            )
-                        }
-                    }
-                    if (index < crowdPositions.lastIndex) {
-                        AppleHairlineDivider(modifier = Modifier.padding(start = 16.dp))
-                    }
-                }
-            }
-        }
+        item { CrowdPositioningSection(uiState = uiState) }
 
         // Category Headline Volume Breakdown
         if (uiState.showVolume && uiState.categoryVolumes.isNotEmpty()) {
@@ -405,28 +344,30 @@ fun TechnicalsSection(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+        uiState.technicalError?.let { message ->
+            item {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "Sample Technical Data — Generated indicators until real-time broker feed is attached.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            text = message,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
                 }
             }
         }
@@ -516,7 +457,7 @@ fun TimeframeSelector(
     selectedTimeframe: String,
     onTimeframeSelected: (String) -> Unit
 ) {
-    val timeframes = listOf("M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1")
+    val timeframes = listOf("M1", "M5", "M15", "H1", "H4", "D1", "W1")
 
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
@@ -631,4 +572,92 @@ fun IndicatorRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurface
         )
     }
+}
+
+private val crowdMajors = listOf("EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "AUDUSD", "USDCAD")
+
+/** Crowd long/short share from Myfxbook traders. It describes what other retail traders hold, not where price will go. */
+@Composable
+fun CrowdPositioningSection(uiState: app.marketbrief.feature.analysis.ui.AnalysisUiState) {
+    Column {
+        Text(
+            text = "CROWD POSITIONING (MYFXBOOK)",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            letterSpacing = 0.8.sp,
+            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+        )
+
+        val shown = uiState.crowd
+            .filter { it.symbol in crowdMajors }
+            .sortedBy { crowdMajors.indexOf(it.symbol) }
+            .ifEmpty { uiState.crowd.take(6) }
+
+        when {
+            !uiState.crowdConnected -> CrowdNote("Connect your Myfxbook account in Settings (gear icon on the Feed) to see crowd long/short positioning.")
+            shown.isEmpty() -> CrowdNote(uiState.crowdError ?: "No positioning data yet.")
+            else -> {
+                AppleGroupedSection {
+                    shown.forEachIndexed { index, p ->
+                        val longPct = p.longPercent
+                        val shortPct = p.shortPercent
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = p.symbol, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    text = "${longPct.toInt()}% Long · ${shortPct.toInt()}% Short",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (longPct >= 50) MarketBriefTheme.colors.bullish else MarketBriefTheme.colors.bearish
+                                )
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(longPct.toFloat().coerceAtLeast(0.1f))
+                                        .fillMaxHeight()
+                                        .background(MarketBriefTheme.colors.bullish)
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .weight(shortPct.toFloat().coerceAtLeast(0.1f))
+                                        .fillMaxHeight()
+                                        .background(MarketBriefTheme.colors.bearish)
+                                )
+                            }
+                        }
+                        if (index < shown.lastIndex) {
+                            AppleHairlineDivider(modifier = Modifier.padding(start = 16.dp))
+                        }
+                    }
+                }
+                uiState.crowdError?.let { CrowdNote("Showing the last data. $it") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CrowdNote(text: String) {
+    Text(
+        text = text,
+        fontSize = 13.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+    )
 }

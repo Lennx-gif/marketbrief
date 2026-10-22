@@ -151,18 +151,14 @@ fun ApplePillChip(
     val backgroundColor = if (isSelected) {
         MaterialTheme.colorScheme.primary
     } else {
-        MarketBriefTheme.colors.cardSurface
+        MarketBriefTheme.colors.subtlePill
     }
     val contentColor = if (isSelected) {
         MaterialTheme.colorScheme.onPrimary
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val borderColor = if (isSelected) {
-        Color.Transparent
-    } else {
-        MarketBriefTheme.colors.hairline
-    }
+    val borderColor = Color.Transparent
 
     Surface(
         modifier = modifier

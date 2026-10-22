@@ -15,15 +15,15 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Apple Liquid Glass Palette
-private val AppleBlueLight = Color(0xFF0062E0) // 5.5:1 contrast on white
-private val AppleBlueDark = Color(0xFF0A84FF)
+// Teal news palette (white surfaces, deep teal accent)
+private val TealLight = Color(0xFF1F6B73) // ~6:1 contrast on white
+private val TealDark = Color(0xFF5BC0C8)
 
 private val LightColors = lightColorScheme(
-    primary = AppleBlueLight,
+    primary = TealLight,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE8F0FC),
-    onPrimaryContainer = AppleBlueLight,
+    primaryContainer = Color(0xFFE2F0F1),
+    onPrimaryContainer = TealLight,
     secondary = Color(0xFF5856D6),
     onSecondary = Color.White,
     secondaryContainer = Color(0xFFEFEBFC),
@@ -32,12 +32,12 @@ private val LightColors = lightColorScheme(
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFE8F8ED),
     onTertiaryContainer = Color(0xFF1F8F5F),
-    background = Color(0xFFF2F2F7),
-    onBackground = Color(0xFF000000),
+    background = Color(0xFFFFFFFF),
+    onBackground = Color(0xFF111418),
     surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF000000),
-    surfaceVariant = Color(0xFFE5E5EA),
-    onSurfaceVariant = Color(0xFF6C6C70),
+    onSurface = Color(0xFF111418),
+    surfaceVariant = Color(0xFFF1F3F4),
+    onSurfaceVariant = Color(0xFF6B7280),
     outline = Color(0xFF8E8E93),
     outlineVariant = Color(0xFFC6C6C8), // 0.5dp hairline divider
     error = Color(0xFFFF3B30),
@@ -47,10 +47,10 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = AppleBlueDark,
+    primary = TealDark,
     onPrimary = Color.Black,
-    primaryContainer = Color(0xFF1C3A5E),
-    onPrimaryContainer = AppleBlueDark,
+    primaryContainer = Color(0xFF173F44),
+    onPrimaryContainer = TealDark,
     secondary = Color(0xFF5E5CE6),
     onSecondary = Color.White,
     secondaryContainer = Color(0xFF282550),
@@ -87,7 +87,7 @@ val LocalMarketBriefColors = staticCompositionLocalOf {
     MarketBriefSemanticColors(
         hairline = Color(0xFFC6C6C8),
         cardSurface = Color(0xFFFFFFFF),
-        subtlePill = Color(0xFFF2F2F7)
+        subtlePill = Color(0xFFF1F3F4)
     )
 }
 
@@ -207,9 +207,9 @@ fun MarketBriefTheme(
             bullish = Color(0xFF1F8F5F),
             bearish = Color(0xFFE0612F),
             neutral = Color(0xFF8E8E93),
-            hairline = Color(0xFFC6C6C8),
+            hairline = Color(0xFFE5E7EB),
             cardSurface = Color(0xFFFFFFFF),
-            subtlePill = Color(0xFFF2F2F7)
+            subtlePill = Color(0xFFF1F3F4)
         )
     }
 

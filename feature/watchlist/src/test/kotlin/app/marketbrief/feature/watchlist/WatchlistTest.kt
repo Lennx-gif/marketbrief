@@ -1,14 +1,17 @@
 package app.marketbrief.feature.watchlist
 
+import app.marketbrief.core.data.MarketDataRepository
 import app.marketbrief.core.model.AssetClass
 import app.marketbrief.core.model.AssetId
 import app.marketbrief.core.model.Candle
 import app.marketbrief.core.model.Quote
+import app.marketbrief.core.model.Timeframe
 import app.marketbrief.feature.watchlist.ui.EconomicEvent
 import app.marketbrief.feature.watchlist.ui.WatchlistItem
 import app.marketbrief.feature.watchlist.ui.WatchlistViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -22,6 +25,16 @@ import org.junit.Assert.*
 class WatchlistTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
+
+    private val fakeMarketData = object : MarketDataRepository {
+        val state = MutableStateFlow<Map<AssetId, Quote>>(emptyMap())
+        override val quotes = state
+        override suspend fun getCandles(assetId: AssetId, timeframe: Timeframe, limit: Int) =
+            Result.success(emptyList<Candle>())
+        override suspend fun getQuote(assetId: AssetId): Result<Quote> = Result.failure(IllegalStateException("offline"))
+        override suspend fun refreshQuotes(ids: Collection<AssetId>) {}
+        override suspend fun searchSymbols(query: String) = Result.success(emptyList<AssetId>())
+    }
 
     @Before
     fun setUp() {
@@ -57,7 +70,7 @@ class WatchlistTest {
 
     @Test
     fun testWatchlistViewModelInitialState() = runTest {
-        val viewModel = WatchlistViewModel()
+        val viewModel = WatchlistViewModel(fakeMarketData)
         
         val state = viewModel.uiState.value
         assertNotNull(state)
@@ -67,16 +80,16 @@ class WatchlistTest {
 
     @Test
     fun testWatchlistViewModelAddAndRemoveItem() = runTest {
-        val viewModel = WatchlistViewModel()
+        val viewModel = WatchlistViewModel(fakeMarketData)
         val initialCount = viewModel.uiState.value.watchlistItems.size
         
-        viewModel.addItem("BTCUSD")
+        viewModel.addItem("ETHUSD")
         assertEquals(initialCount + 1, viewModel.uiState.value.watchlistItems.size)
-        assertTrue(viewModel.uiState.value.watchlistItems.any { it.symbol == "BTCUSD" })
+        assertTrue(viewModel.uiState.value.watchlistItems.any { it.symbol == "ETHUSD" })
         
-        viewModel.removeItem("BTCUSD")
+        viewModel.removeItem("ETHUSD")
         assertEquals(initialCount, viewModel.uiState.value.watchlistItems.size)
-        assertFalse(viewModel.uiState.value.watchlistItems.any { it.symbol == "BTCUSD" })
+        assertFalse(viewModel.uiState.value.watchlistItems.any { it.symbol == "ETHUSD" })
     }
 
     @Test
@@ -107,5 +120,17 @@ class WatchlistTest {
         
         assertEquals(1.0850, candle.open, 0.0001)
         assertEquals(1.0855, candle.close, 0.0001)
+    }
+
+    @Test
+    fun testLiveQuoteUpdatesPriceAndDirection() = runTest {
+        val viewModel = WatchlistViewModel(fakeMarketData)
+        val eur = AssetId("EURUSD", AssetClass.FOREX)
+        fakeMarketData.state.value = mapOf(eur to Quote(eur, 1.1, 1.1, 0L, changePercent = -0.4))
+
+        val item = viewModel.uiState.value.watchlistItems.first { it.symbol == "EURUSD" }
+        assertEquals(1.1, item.currentPrice!!.toDouble(), 1e-9)
+        assertEquals(-0.4, item.changePercent, 1e-9)
+        assertFalse(item.isBullish)
     }
 }

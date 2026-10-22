@@ -87,7 +87,9 @@ data class Quote(
     val assetId: AssetId,
     val bid: Double,
     val ask: Double,
-    val timestamp: Long
+    val timestamp: Long,
+    /** Percent change versus the previous close, when the provider reports it. */
+    val changePercent: Double? = null
 ) {
     val mid: Double
         get() = (bid + ask) / 2
