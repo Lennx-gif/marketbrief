@@ -18,16 +18,17 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingFlat
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.TrendingDown
-import androidx.compose.material.icons.filled.TrendingFlat
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -46,8 +47,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+// Removed incorrect import androidx.glance.preview.Preview which shadowed Compose UI @Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.marketbrief.core.analysis.MarketSnapshot
@@ -69,6 +72,23 @@ fun AnalysisScreen(viewModel: AnalysisViewModel = hiltViewModel()) {
     // Cheap when the cache is fresh; picks up a Myfxbook connection made in Settings.
     LaunchedEffect(Unit) { viewModel.refreshCrowd() }
 
+    AnalysisScreenContent(
+        uiState = uiState,
+        onModeSelected = { viewModel.setMode(it) },
+        onTimeWindowSelected = { viewModel.setTimeWindow(it) },
+        onAssetSelected = { viewModel.onAssetSelected(it) },
+        onTimeframeSelected = { viewModel.onTimeframeSelected(it) }
+    )
+}
+
+@Composable
+fun AnalysisScreenContent(
+    uiState: app.marketbrief.feature.analysis.ui.AnalysisUiState,
+    onModeSelected: (AnalysisMode) -> Unit = {},
+    onTimeWindowSelected: (SentimentTimeWindow) -> Unit = {},
+    onAssetSelected: (String) -> Unit = {},
+    onTimeframeSelected: (String) -> Unit = {}
+) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
@@ -97,7 +117,7 @@ fun AnalysisScreen(viewModel: AnalysisViewModel = hiltViewModel()) {
                 AppleSegmentedControl(
                     items = listOf(AnalysisMode.SENTIMENT, AnalysisMode.TECHNICALS),
                     selectedItem = uiState.mode,
-                    onItemSelected = { viewModel.setMode(it) },
+                    onItemSelected = onModeSelected,
                     labelProvider = { if (it == AnalysisMode.SENTIMENT) "Feed Sentiment" else "Technicals" },
                     modifier = Modifier.width(260.dp)
                 )
@@ -106,13 +126,13 @@ fun AnalysisScreen(viewModel: AnalysisViewModel = hiltViewModel()) {
             if (uiState.mode == AnalysisMode.SENTIMENT) {
                 SentimentSection(
                     uiState = uiState,
-                    onTimeWindowSelected = { viewModel.setTimeWindow(it) }
+                    onTimeWindowSelected = onTimeWindowSelected
                 )
             } else {
                 TechnicalsSection(
                     uiState = uiState,
-                    onAssetSelected = { viewModel.onAssetSelected(it) },
-                    onTimeframeSelected = { viewModel.onTimeframeSelected(it) }
+                    onAssetSelected = onAssetSelected,
+                    onTimeframeSelected = onTimeframeSelected
                 )
             }
         }
@@ -288,9 +308,9 @@ fun SentimentRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 val icon = when {
-                    isBullish -> Icons.Default.TrendingUp
-                    isBearish -> Icons.Default.TrendingDown
-                    else -> Icons.Default.TrendingFlat
+                    isBullish -> Icons.AutoMirrored.Filled.TrendingUp
+                    isBearish -> Icons.AutoMirrored.Filled.TrendingDown
+                    else -> Icons.AutoMirrored.Filled.TrendingFlat
                 }
                 Icon(
                     imageVector = icon,
@@ -427,7 +447,7 @@ fun AssetSelector(
                 )
             },
             readOnly = true,
-            modifier = Modifier.fillMaxWidth().menuAnchor(),
+            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
             shape = RoundedCornerShape(12.dp),
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = MarketBriefTheme.colors.cardSurface,
@@ -660,4 +680,63 @@ private fun CrowdNote(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
     )
+}
+
+@Preview(name = "Analysis Screen - Sentiment", showBackground = true)
+@Composable
+fun AnalysisScreenPreview() {
+    MarketBriefTheme {
+        AnalysisScreenContent(
+            uiState = app.marketbrief.feature.analysis.ui.AnalysisUiState(
+                mode = AnalysisMode.SENTIMENT,
+                timeWindow = SentimentTimeWindow.H24,
+                sentiments = mapOf(
+                    "EURUSD" to Sentiment(0.35f, "Bullish", 12),
+                    "GBPUSD" to Sentiment(-0.20f, "Bearish", 8),
+                    "USDJPY" to Sentiment(0.05f, "Neutral", 5)
+                ),
+                categoryVolumes = mapOf(
+                    "Macroeconomics" to 15,
+                    "Forex" to 10,
+                    "Crypto" to 5
+                ),
+                showVolume = true
+            )
+        )
+    }
+}
+
+
+@Preview(name = "Analysis Screen - Technicals", showBackground = true)
+@Composable
+fun AnalysisScreenTechnicalsPreview() {
+    MarketBriefTheme {
+        AnalysisScreenContent(
+            uiState = app.marketbrief.feature.analysis.ui.AnalysisUiState(
+                mode = AnalysisMode.TECHNICALS,
+                availableAssets = listOf("EURUSD", "GBPUSD", "USDJPY", "XAUUSD"),
+                selectedAsset = "EURUSD",
+                selectedTimeframe = "H1",
+                snapshot = MarketSnapshot(
+                    assetId = app.marketbrief.core.model.AssetId("EURUSD", app.marketbrief.core.model.AssetClass.FOREX),
+                    timestamp = System.currentTimeMillis(),
+                    currentPrice = java.math.BigDecimal("1.0850"),
+                    sma20 = java.math.BigDecimal("1.0820"),
+                    sma50 = java.math.BigDecimal("1.0800"),
+                    sma200 = java.math.BigDecimal("1.0750"),
+                    ema20 = java.math.BigDecimal("1.0830"),
+                    ema50 = java.math.BigDecimal("1.0810"),
+                    rsi14 = java.math.BigDecimal("58.20"),
+                    atr14 = java.math.BigDecimal("0.0045"),
+                    atrPercent = java.math.BigDecimal("0.41"),
+                    macd = Triple(java.math.BigDecimal("0.0012"), java.math.BigDecimal("0.0008"), java.math.BigDecimal("0.0004")),
+                    bollingerBands = Triple(java.math.BigDecimal("1.0890"), java.math.BigDecimal("1.0850"), java.math.BigDecimal("1.0810")),
+                    stochastic = Pair(java.math.BigDecimal("75.0"), java.math.BigDecimal("70.0")),
+                    pivotPoints = mapOf("P" to java.math.BigDecimal("1.0845"), "R1" to java.math.BigDecimal("1.0880"), "S1" to java.math.BigDecimal("1.0810")),
+                    trend = MarketSnapshot.Trend.UPTREND,
+                    volatility = MarketSnapshot.Volatility.NORMAL
+                )
+            )
+        )
+    }
 }
