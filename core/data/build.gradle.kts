@@ -24,6 +24,7 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 tasks.test {

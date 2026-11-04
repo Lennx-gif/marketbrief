@@ -32,6 +32,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -102,11 +103,45 @@ fun NewsScreen(
                 onOpenSettings = onOpenSettings
             )
 
+            if (Category.Saved in uiState.selectedCategories) {
+                OutlinedTextField(
+                    value = uiState.savedSearchText,
+                    onValueChange = viewModel::onSavedSearchChanged,
+                    label = { Text("Search saved articles and downloaded text") },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    singleLine = true
+                )
+                if (uiState.savedTags.isNotEmpty()) {
+                    LazyRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item {
+                            ApplePillChip("All tags", uiState.selectedSavedTag == null, onClick = { viewModel.onSavedTagSelected(null) })
+                        }
+                        items(uiState.savedTags) { tag ->
+                            ApplePillChip(tag, uiState.selectedSavedTag == tag, onClick = { viewModel.onSavedTagSelected(if (uiState.selectedSavedTag == tag) null else tag) })
+                        }
+                    }
+                }
+            }
+
             // Horizontally Scrollable Category Filter Row
             CategoryFilterBar(
                 selectedCategories = uiState.selectedCategories,
                 onCategoryClick = { viewModel.onAction(FeedAction.ToggleCategory(it)) }
             )
+
+            if (uiState.usdKesRate != null) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("USD / KES", fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.weight(1f))
+                        Text("${String.format(java.util.Locale.US, "%.2f", uiState.usdKesRate)} KES", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
 
             // Non-blocking Banner (Rate Limit / Offline status)
             uiState.banner?.let { banner ->

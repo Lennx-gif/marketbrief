@@ -32,6 +32,7 @@ include(":feature:calculator")
 include(":feature:analysis")
 include(":feature:watchlist")
 include(":feature:settings")
+include(":feature:journal")
 
 // App module
 include(":app")

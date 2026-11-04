@@ -1,6 +1,7 @@
 package app.marketbrief.feature.news
 
 import app.marketbrief.core.data.InMemoryNewsRepository
+import app.marketbrief.core.data.MarketDataRepository
 import app.marketbrief.core.entitlements.Plan
 import app.marketbrief.core.entitlements.PlanSource
 import app.marketbrief.core.model.Article
@@ -54,7 +55,9 @@ class NewsViewModelTest {
             override val plan: Plan = Plan.PERSONAL
         }
 
-        val viewModel = NewsViewModel(repository, prefs, planSource)
+        val marketData = mockk<MarketDataRepository>(relaxed = true)
+        every { marketData.quotes } returns flowOf(emptyMap())
+        val viewModel = NewsViewModel(repository, prefs, marketData, planSource)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect()
         }
@@ -77,7 +80,9 @@ class NewsViewModelTest {
             override val plan: Plan = Plan.PERSONAL
         }
 
-        val viewModel = NewsViewModel(repository, prefs, planSource)
+        val marketData = mockk<MarketDataRepository>(relaxed = true)
+        every { marketData.quotes } returns flowOf(emptyMap())
+        val viewModel = NewsViewModel(repository, prefs, marketData, planSource)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect()
         }

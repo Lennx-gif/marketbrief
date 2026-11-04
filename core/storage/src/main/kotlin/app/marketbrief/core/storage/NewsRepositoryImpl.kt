@@ -10,6 +10,7 @@ import app.marketbrief.core.data.RefreshResult
 import app.marketbrief.core.data.remote.NewsApiException
 import app.marketbrief.core.data.remote.NewsError
 import app.marketbrief.core.data.remote.NewsQueries
+import app.marketbrief.core.data.FtsQuerySanitizer
 import app.marketbrief.core.model.Article
 import app.marketbrief.core.model.ArticleBody
 import app.marketbrief.core.model.Category
@@ -29,6 +30,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -40,26 +44,34 @@ class NewsRepositoryImpl @Inject constructor(
     private val articleBodyDao: ArticleBodyDao,
     private val provider: NewsProvider,
     private val prefs: UserPrefsRepository,
+    private val articleSearchDao: app.marketbrief.core.storage.db.ArticleSearchDao,
+    private val sourcePrefDao: app.marketbrief.core.storage.db.SourcePrefDao,
+    private val articleTagDao: app.marketbrief.core.storage.db.ArticleTagDao,
+    private val refreshScheduler: app.marketbrief.core.data.NewsRefreshScheduler,
     private val scorer: SentimentScorer = SentimentScorer(),
     private val classifier: CategoryClassifier = CategoryClassifier(),
     private val tagger: AssetTagger = AssetTagger(),
     private val extractor: ArticleExtractor = ArticleExtractor()
 ) : NewsRepository {
 
+    private val extractionLocks = ConcurrentHashMap<String, Mutex>()
+
     override fun observeFeed(query: FeedQuery): Flow<List<Article>> {
         return combine(
             articleDao.observeAll(),
             bookmarkDao.observeBookmarkIds(),
-            prefs.homeCountry
-        ) { entityList, bookmarkIds, homeCountry ->
+            prefs.homeCountry,
+            sourcePrefDao.observeAll()
+        ) { entityList, bookmarkIds, homeCountry, sourcePrefs ->
             val savedSet = bookmarkIds.toSet()
+            val weights = sourcePrefs.associate { it.sourceName to it.weight }
             val domainList = entityList.map { it.toDomain() }
 
             if (Category.Saved in query.categories) {
                 return@combine domainList.filter { it.id in savedSet }
             }
 
-            var filtered = domainList
+            var filtered = domainList.filter { weights[it.sourceName] != "MUTE" }
             if (Category.All !in query.categories) {
                 val categoryLabels = query.categories.map { it.label }
                 filtered = filtered.filter { article ->
@@ -69,10 +81,10 @@ class NewsRepositoryImpl @Inject constructor(
 
             when (val countryFilter = query.country) {
                 is CountryFilter.Home -> {
-                    rankArticles(filtered, homeCountry)
+                    rankArticles(filtered, homeCountry, weights)
                 }
                 is CountryFilter.Global -> {
-                    rankArticles(filtered, null)
+                    rankArticles(filtered, null, weights)
                 }
                 is CountryFilter.Only -> {
                     val subset = filtered.filter { article ->
@@ -81,7 +93,7 @@ class NewsRepositoryImpl @Inject constructor(
                             article.title.contains(code, ignoreCase = true)
                         }
                     }
-                    rankArticles(if (subset.isNotEmpty()) subset else filtered, null)
+                    rankArticles(if (subset.isNotEmpty()) subset else filtered, null, weights)
                 }
             }
         }
@@ -100,31 +112,57 @@ class NewsRepositoryImpl @Inject constructor(
         articleBodyDao.getBody(articleId)?.toDomain()
     }
 
-    override suspend fun extractArticleBody(articleId: String): Result<ArticleBody> = withContext(Dispatchers.IO) {
-        val cached = articleBodyDao.getBody(articleId)
-        if (cached != null && (cached.kind == "FULL" || cached.failureReason != null)) {
-            return@withContext Result.success(cached.toDomain())
-        }
-        val articleEntity = articleDao.getById(articleId)
-            ?: return@withContext Result.failure(IllegalStateException("Article not found in cache: $articleId"))
+    override suspend fun extractArticleBody(articleId: String): Result<ArticleBody> = extractionLocks.computeIfAbsent(articleId) { Mutex() }.withLock {
+        withContext(Dispatchers.IO) {
+            val cached = articleBodyDao.getBody(articleId)
+            if (cached != null && (cached.kind == "FULL" || cached.failureReason != null)) {
+                return@withContext Result.success(cached.toDomain())
+            }
+            val articleEntity = articleDao.getById(articleId)
+                ?: return@withContext Result.failure(IllegalStateException("Article not found in cache: $articleId"))
 
-        val body = extractor.extractFromUrl(articleEntity.toDomain())
-        articleBodyDao.insertBody(ArticleBodyEntity.fromDomain(body))
-        Result.success(body)
+            val body = extractor.extractFromUrl(articleEntity.toDomain())
+            articleBodyDao.insertBody(ArticleBodyEntity.fromDomain(body))
+            articleSearchDao.removeBody(articleId)
+            articleSearchDao.indexBody(app.marketbrief.core.storage.db.ArticleBodyFtsEntity(articleId, body.markdown))
+            Result.success(body)
+        }
+    }
+
+    override fun observeSourcePreferences(): Flow<Map<String, String>> = sourcePrefDao.observeAll().map { rows -> rows.associate { it.sourceName to it.weight } }
+    override fun observeAvailableSources(): Flow<List<String>> = articleDao.observeSourceNames()
+    override suspend fun setSourcePreference(source: String, weight: String) {
+        if (weight == "NORMAL") sourcePrefDao.clear(source) else sourcePrefDao.set(app.marketbrief.core.storage.db.SourcePrefEntity(source, weight))
+    }
+    override suspend fun articleTags(articleId: String): List<String> = articleTagDao.observeTags(articleId).first()
+    override suspend fun setArticleTag(articleId: String, tag: String, enabled: Boolean) {
+        if (enabled) articleTagDao.add(app.marketbrief.core.storage.db.ArticleTagEntity(articleId, tag.trim())) else articleTagDao.remove(articleId, tag.trim())
+    }
+    override fun observeSavedTags(): Flow<List<String>> = articleTagDao.observeAllTags()
+    override suspend fun savedArticlesWithTag(tag: String): List<Article> {
+        val saved = bookmarkDao.observeBookmarkIds().first().toSet()
+        return articleTagDao.articleIdsForTag(tag).filter { it in saved }.mapNotNull { articleDao.getById(it)?.toDomain() }
     }
 
     override suspend fun refresh(query: FeedQuery): RefreshResult = withContext(Dispatchers.IO) {
-        if (!prefs.canMakeRequest(1)) {
+        val homeCountry = prefs.homeCountry.first()
+        val kenyaQuery = prefs.kenyaTradeLens.first() && homeCountry.equals("Kenya", true) && query.country is CountryFilter.Home && query.categories.none { it != Category.All }
+        val requestCount = if (kenyaQuery) 2 else 1
+        if (!prefs.canMakeRequest(requestCount)) {
             return@withContext RefreshResult.BudgetExhausted
         }
 
-        val homeCountry = prefs.homeCountry.first()
         val (queryString, regionTag) = buildQuery(query, homeCountry)
 
         val result = provider.fetchEverything(queryString, regionTag = regionTag, pageSize = 30)
+        prefs.recordRequest(1)
         result.fold(
             onSuccess = { articles ->
-                val scoredEntities = articles.map { article ->
+                val kenyaArticles = if (kenyaQuery) {
+                    provider.fetchEverything(NewsQueries.kenyaTrade(), regionTag = "Kenya", pageSize = 30).also { prefs.recordRequest(1) }.getOrDefault(emptyList())
+                } else emptyList()
+                val combinedArticles = (articles + kenyaArticles).distinctBy { it.id }
+                val scoredEntities = combinedArticles.map { article ->
                     val score = article.sentiment ?: scorer.score("${article.title} ${article.summary}")
                     val autoCategories = if (article.categories.isEmpty()) {
                         classifier.classify(article.title, article.summary).map { it.label }
@@ -142,13 +180,15 @@ class NewsRepositoryImpl @Inject constructor(
                 }
 
                 articleDao.insertArticles(scoredEntities)
-                prefs.recordRequest(1)
+                scoredEntities.forEach { articleSearchDao.removeArticle(it.id) }
+                articleSearchDao.indexArticles(scoredEntities.map { app.marketbrief.core.storage.db.ArticleFtsEntity(it.id, it.title, it.summary) })
 
                 // Prune non-saved/non-downloaded older than 30 days
                 val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
                 articleDao.pruneOldArticles(thirtyDaysAgo)
+                runCatching { refreshScheduler.schedulePrefetch() }
 
-                RefreshResult.Success(articles.size)
+                RefreshResult.Success(combinedArticles.size)
             },
             onFailure = { throwable ->
                 val newsError = if (throwable is NewsApiException) {
@@ -170,12 +210,7 @@ class NewsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun download(articleId: String): DownloadResult = withContext(Dispatchers.IO) {
-        val articleEntity = articleDao.getById(articleId)
-            ?: return@withContext DownloadResult.Failure("Article not found in cache")
-        val article = articleEntity.toDomain()
-
-        val body = extractor.extractFromUrl(article)
-        articleBodyDao.insertBody(ArticleBodyEntity.fromDomain(body))
+        val body = extractArticleBody(articleId).getOrElse { return@withContext DownloadResult.Failure(it.message ?: "Article extraction failed") }
         downloadDao.insertDownload(
             DownloadEntity(
                 articleId = articleId,
@@ -188,10 +223,14 @@ class NewsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun search(query: String): List<Article> = withContext(Dispatchers.IO) {
-        articleDao.search(query).map { it.toDomain() }
+        if (query.isBlank()) return@withContext emptyList()
+        val safe = FtsQuerySanitizer.prefixQuery(query) ?: return@withContext emptyList()
+        val savedIds = bookmarkDao.observeBookmarkIds().first().toSet()
+        val ids = (articleSearchDao.searchArticles(safe) + articleSearchDao.searchBodies(safe)).toSet().intersect(savedIds)
+        ids.mapNotNull { articleDao.getById(it)?.toDomain() }
     }
 
-    private fun rankArticles(articles: List<Article>, homeCountry: String?): List<Article> {
+    private fun rankArticles(articles: List<Article>, homeCountry: String?, sourceWeights: Map<String, String>): List<Article> {
         val now = System.currentTimeMillis()
         return articles.sortedByDescending { article ->
             var score = 0.0
@@ -209,6 +248,7 @@ class NewsRepositoryImpl @Inject constructor(
             if (article.categories.any { it.equals("Trade", true) || it.equals("Finance", true) || it.equals("Forex", true) }) {
                 score += 8.0
             }
+            if (sourceWeights[article.sourceName] == "BOOST") score += 10.0
 
             score
         }

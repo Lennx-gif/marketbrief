@@ -6,7 +6,6 @@ plugins {
     alias(libs.plugins.hilt)
     id("org.jetbrains.kotlin.kapt")
 }
-
 android {
     namespace = "app.marketbrief.core.storage"
     compileSdk = 34
@@ -24,6 +23,7 @@ android {
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:data"))
+    implementation(project(":core:risk"))
     implementation(project(":core:analysis"))
 
     implementation(libs.androidx.core.ktx)
@@ -43,6 +43,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
+    androidTestImplementation("androidx.room:room-testing:2.6.1")
+    androidTestImplementation("androidx.test:core:1.5.0")
 }
 
 kapt {
@@ -53,7 +55,11 @@ kapt {
     }
 }
 
+val kaptTempDirectory = layout.buildDirectory.dir("tmp/kapt").get().asFile
 tasks.withType<org.jetbrains.kotlin.gradle.internal.KaptWithoutKotlincTask>().configureEach {
-    kaptProcessJvmArgs.add("-Djava.io.tmpdir=C:/Users/mysti/AppData/Local/Temp")
-    kaptProcessJvmArgs.add("-Dorg.sqlite.tmpdir=C:/Users/mysti/AppData/Local/Temp")
+    doFirst { kaptTempDirectory.mkdirs() }
+    kaptProcessJvmArgs.add("-Djava.io.tmpdir=${kaptTempDirectory.absolutePath}")
+    kaptProcessJvmArgs.add("-Dorg.sqlite.tmpdir=${kaptTempDirectory.absolutePath}")
 }
+
+\r\n

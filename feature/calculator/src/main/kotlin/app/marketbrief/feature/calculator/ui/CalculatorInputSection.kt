@@ -241,7 +241,8 @@ fun CalculatorInputSection(
     onTakeProfitChange: (String) -> Unit,
     onTakeProfitTypeChange: (Boolean) -> Unit,
     onLeverageChange: (String) -> Unit,
-    onRateOverrideChange: (String) -> Unit
+    onRateOverrideChange: (String) -> Unit,
+    onUseLivePrice: () -> Unit
 ) {
     val topCurrencies = listOf("USD", "EUR", "GBP", "KES", "JPY", "CAD", "AUD", "CHF")
 
@@ -358,10 +359,22 @@ fun CalculatorInputSection(
                 )
 
                 // Entry Price
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = uiState.entryText,
+                        onValueChange = onEntryChange,
+                        label = { Text("Entry Price") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    TextButton(onClick = onUseLivePrice) { Text("Live price") }
+                }
                 OutlinedTextField(
-                    value = uiState.entryText,
-                    onValueChange = onEntryChange,
-                    label = { Text("Entry Price") },
+                    value = uiState.rateOverrideText,
+                    onValueChange = onRateOverrideChange,
+                    label = { Text("Manual quote-to-account rate (optional)") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

@@ -2,6 +2,8 @@ package app.marketbrief.core.storage.db
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import androidx.room.Fts4
+import androidx.room.Index
 import app.marketbrief.core.model.Article
 
 @Entity(tableName = "articles")
@@ -97,3 +99,116 @@ data class ArticleBodyEntity(
         )
     }
 }
+
+@Entity(tableName = "presets")
+data class PresetEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val instrumentSymbol: String,
+    val accountCurrency: String,
+    val balanceText: String,
+    val riskIsPercent: Boolean,
+    val riskValueText: String,
+    val leverageText: String,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "trade_log")
+data class TradeLogEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val symbol: String,
+    val direction: String,
+    val entryText: String,
+    val stopText: String,
+    val stopIsPips: Boolean,
+    val takeProfitText: String,
+    val lots: String,
+    val riskAmount: String,
+    val accountCurrency: String,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "journal_entries")
+data class JournalEntryEntity(
+    @PrimaryKey val id: String,
+    val createdAt: Long,
+    val symbol: String,
+    val assetClass: String,
+    val direction: String,
+    val entry: String,
+    val stop: String,
+    val stopIsPips: Boolean,
+    val takeProfit: String?,
+    val lots: String,
+    val riskAmount: String,
+    val riskPercent: String,
+    val accountCurrency: String,
+    val status: String,
+    val openedAt: Long?,
+    val closedAt: Long?,
+    val exitPrice: String?,
+    val pnl: String?,
+    val rMultiple: String?,
+    val notes: String,
+    val tags: String
+)
+
+@Entity(tableName = "journal_headlines", primaryKeys = ["entryId", "articleId"])
+data class JournalHeadlineEntity(
+    val entryId: String,
+    val articleId: String,
+    val title: String,
+    val url: String
+)
+
+@Entity(tableName = "account_settings")
+data class AccountSettingsEntity(
+    @PrimaryKey val id: Int = 1,
+    val startingBalance: String,
+    val currency: String,
+    val maxRiskPerTradePercent: String,
+    val dailyLossLimitPercent: String,
+    val maxOpenRiskPercent: String,
+    val maxDrawdownPercent: String,
+    val drawdownMode: String,
+    val resetTimezone: String
+)
+
+@Entity(tableName = "calendar_events")
+data class CalendarEventEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val currency: String,
+    val instant: Long,
+    val impact: String,
+    val source: String
+)
+
+@Entity(tableName = "price_alerts", indices = [Index(value = ["symbol"])])
+data class PriceAlertEntity(
+    @PrimaryKey val id: String,
+    val symbol: String,
+    val assetClass: String,
+    val targetPrice: String,
+    val direction: String,
+    val createdAt: Long,
+    val triggeredAt: Long?,
+    val lastCheckedPrice: String?
+)
+
+@Entity(tableName = "article_tags", primaryKeys = ["articleId", "tag"])
+data class ArticleTagEntity(val articleId: String, val tag: String)
+
+@Entity(tableName = "source_preferences")
+data class SourcePrefEntity(@PrimaryKey val sourceName: String, val weight: String)
+
+@Entity(tableName = "rate_cache")
+data class RateCacheEntity(@PrimaryKey val currencyPair: String, val rate: String, val updatedAt: Long)
+
+@Fts4
+@Entity(tableName = "article_fts")
+data class ArticleFtsEntity(val articleId: String, val title: String, val summary: String)
+
+@Fts4
+@Entity(tableName = "article_body_fts")
+data class ArticleBodyFtsEntity(val articleId: String, val markdown: String)

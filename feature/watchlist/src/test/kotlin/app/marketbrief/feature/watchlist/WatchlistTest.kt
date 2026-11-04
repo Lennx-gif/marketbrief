@@ -1,6 +1,11 @@
 package app.marketbrief.feature.watchlist
 
 import app.marketbrief.core.data.MarketDataRepository
+import app.marketbrief.core.data.PriceAlertNotifier
+import app.marketbrief.core.data.EconomicCalendarProvider
+import app.marketbrief.core.data.CalendarEvent
+import app.marketbrief.core.storage.db.PriceAlertDao
+import app.marketbrief.core.storage.db.PriceAlertEntity
 import app.marketbrief.core.model.AssetClass
 import app.marketbrief.core.model.AssetId
 import app.marketbrief.core.model.Candle
@@ -12,6 +17,7 @@ import app.marketbrief.feature.watchlist.ui.WatchlistViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -34,6 +40,21 @@ class WatchlistTest {
         override suspend fun getQuote(assetId: AssetId): Result<Quote> = Result.failure(IllegalStateException("offline"))
         override suspend fun refreshQuotes(ids: Collection<AssetId>) {}
         override suspend fun searchSymbols(query: String) = Result.success(emptyList<AssetId>())
+    }
+
+    private val alertDao = object : PriceAlertDao {
+        private val state = MutableStateFlow<List<PriceAlertEntity>>(emptyList())
+        override fun observeActive(): Flow<List<PriceAlertEntity>> = state
+        override suspend fun active() = state.value
+        override suspend fun upsert(alert: PriceAlertEntity) { state.value = state.value.filterNot { it.id == alert.id } + alert }
+        override suspend fun delete(id: String) { state.value = state.value.filterNot { it.id == id } }
+    }
+    private val notifier = PriceAlertNotifier { _, _, _ -> }
+    private val calendar = object : EconomicCalendarProvider {
+        private val state = MutableStateFlow<List<CalendarEvent>>(emptyList())
+        override fun observeEvents() = state
+        override suspend fun add(event: CalendarEvent) { state.value = state.value + event }
+        override suspend fun importCsv(csv: String) = 0
     }
 
     @Before
@@ -70,17 +91,17 @@ class WatchlistTest {
 
     @Test
     fun testWatchlistViewModelInitialState() = runTest {
-        val viewModel = WatchlistViewModel(fakeMarketData)
+        val viewModel = WatchlistViewModel(fakeMarketData, alertDao, notifier, calendar)
         
         val state = viewModel.uiState.value
         assertNotNull(state)
         assertTrue(state.watchlistItems.isNotEmpty())
-        assertTrue(state.economicEvents.isNotEmpty())
+        assertTrue(state.economicEvents.isEmpty())
     }
 
     @Test
     fun testWatchlistViewModelAddAndRemoveItem() = runTest {
-        val viewModel = WatchlistViewModel(fakeMarketData)
+        val viewModel = WatchlistViewModel(fakeMarketData, alertDao, notifier, calendar)
         val initialCount = viewModel.uiState.value.watchlistItems.size
         
         viewModel.addItem("ETHUSD")
@@ -124,7 +145,7 @@ class WatchlistTest {
 
     @Test
     fun testLiveQuoteUpdatesPriceAndDirection() = runTest {
-        val viewModel = WatchlistViewModel(fakeMarketData)
+        val viewModel = WatchlistViewModel(fakeMarketData, alertDao, notifier, calendar)
         val eur = AssetId("EURUSD", AssetClass.FOREX)
         fakeMarketData.state.value = mapOf(eur to Quote(eur, 1.1, 1.1, 0L, changePercent = -0.4))
 

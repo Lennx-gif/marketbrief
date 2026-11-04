@@ -3,19 +3,36 @@ package app.marketbrief.feature.watchlist.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.marketbrief.core.data.MarketDataRepository
+import app.marketbrief.core.data.CalendarEvent
+import app.marketbrief.core.data.EconomicCalendarProvider
+import app.marketbrief.core.data.AlertDirection
+import app.marketbrief.core.data.AlertEvaluator
+import app.marketbrief.core.data.AlertSnapshot
+import app.marketbrief.core.data.PriceAlertNotifier
 import app.marketbrief.core.model.AssetClass
 import app.marketbrief.core.model.AssetId
+import app.marketbrief.core.storage.db.PriceAlertDao
+import app.marketbrief.core.storage.db.PriceAlertEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
+import java.util.UUID
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 @HiltViewModel
 class WatchlistViewModel @Inject constructor(
-    private val marketData: MarketDataRepository
+    private val marketData: MarketDataRepository,
+    private val alertDao: PriceAlertDao,
+    private val alertNotifier: PriceAlertNotifier,
+    private val calendarProvider: EconomicCalendarProvider
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WatchlistUiState())
@@ -30,14 +47,18 @@ class WatchlistViewModel @Inject constructor(
                     WatchlistItem("XAUUSD", "Spot Gold", AssetClass.COMMODITY, null),
                     WatchlistItem("AAPL", "Apple Inc.", AssetClass.STOCK, null),
                     WatchlistItem("BTCUSD", "Bitcoin", AssetClass.CRYPTO, null)
-                ),
-                economicEvents = listOf(  // Sample schedule: no calendar provider is connected yet.
-                    EconomicEvent("US Non-Farm Payrolls", "USD", "12:30 UTC", "High"),
-                    EconomicEvent("ECB Interest Rate Decision", "EUR", "13:45 UTC", "High"),
-                    EconomicEvent("UK CPI (YoY)", "GBP", "07:00 UTC", "Medium"),
-                    EconomicEvent("US Initial Jobless Claims", "USD", "13:30 UTC", "Medium")
                 )
             )
+        }
+        viewModelScope.launch {
+            alertDao.observeActive().collect { alerts -> _uiState.update { it.copy(priceAlerts = alerts) } }
+        }
+        viewModelScope.launch {
+            calendarProvider.observeEvents().collect { events ->
+                _uiState.update { state -> state.copy(economicEvents = events.map { event ->
+                    EconomicEvent(event.title, event.currency, Instant.ofEpochMilli(event.instantEpochMillis).atZone(ZoneId.of("Africa/Nairobi")).format(DateTimeFormatter.ofPattern("EEE HH:mm")), event.impact, event.instantEpochMillis, event.id)
+                }) }
+            }
         }
     }
 
@@ -57,6 +78,7 @@ class WatchlistViewModel @Inject constructor(
                         }
                     )
                 }
+                evaluateAlerts(quotes)
             }
         }
         refresh()
@@ -127,11 +149,51 @@ class WatchlistViewModel @Inject constructor(
     fun removeItem(symbol: String) {
         _uiState.update { it.copy(watchlistItems = it.watchlistItems.filter { it.symbol != symbol }) }
     }
+
+    fun addPriceAlert(symbol: String, target: String, direction: AlertDirection) {
+        val item = _uiState.value.watchlistItems.firstOrNull { it.symbol == symbol } ?: return
+        if (target.toDoubleOrNull() == null) return
+        viewModelScope.launch {
+            alertDao.upsert(PriceAlertEntity(UUID.randomUUID().toString(), symbol, item.assetClass.name, target, direction.name, System.currentTimeMillis(), null, _uiState.value.watchlistItems.firstOrNull { it.symbol == symbol }?.currentPrice?.toPlainString()))
+        }
+    }
+
+    fun deletePriceAlert(id: String) { viewModelScope.launch { alertDao.delete(id) } }
+
+    fun addCalendarEvent(title: String, currency: String, instant: String, impact: String) {
+        val epoch = runCatching { Instant.parse(instant).toEpochMilli() }
+            .recoverCatching { java.time.OffsetDateTime.parse(instant).toInstant().toEpochMilli() }.getOrNull() ?: return
+        viewModelScope.launch { calendarProvider.add(CalendarEvent(UUID.randomUUID().toString(), title, currency.uppercase(), epoch, impact.uppercase(), "USER")) }
+    }
+
+    fun importCalendarCsv(csv: String) {
+        viewModelScope.launch {
+            val count = calendarProvider.importCsv(csv)
+            _uiState.update { it.copy(calendarMessage = "$count events imported") }
+        }
+    }
+
+    private suspend fun evaluateAlerts(quotes: Map<AssetId, app.marketbrief.core.model.Quote>) {
+        alertDao.active().forEach { entity ->
+            val assetClass = runCatching { AssetClass.valueOf(entity.assetClass) }.getOrDefault(AssetClass.FOREX)
+            val price = quotes[AssetId(entity.symbol, assetClass)]?.mid ?: return@forEach
+            val target = entity.targetPrice.toDoubleOrNull() ?: return@forEach
+            val evaluation = AlertEvaluator.evaluate(AlertSnapshot(entity.id, target, AlertDirection.valueOf(entity.direction), entity.lastCheckedPrice?.toDoubleOrNull()), price)
+            alertDao.upsert(entity.copy(lastCheckedPrice = price.toString(), triggeredAt = if (evaluation.crossed) System.currentTimeMillis() else null))
+            if (evaluation.crossed) {
+                alertNotifier.notify(entity.id, entity.symbol, entity.targetPrice)
+                _uiState.update { it.copy(alertMessage = "${entity.symbol} crossed ${entity.targetPrice}") }
+            }
+        }
+    }
 }
 
 data class WatchlistUiState(
     val watchlistItems: List<WatchlistItem> = emptyList(),
     val economicEvents: List<EconomicEvent> = emptyList(),
+    val priceAlerts: List<PriceAlertEntity> = emptyList(),
+    val alertMessage: String? = null,
+    val calendarMessage: String? = null,
     val isRefreshing: Boolean = false
 )
 
@@ -148,5 +210,7 @@ data class EconomicEvent(
     val title: String,
     val currency: String,
     val time: String,
-    val impact: String
+    val impact: String,
+    val instant: Long = 0L,
+    val id: String = ""
 )

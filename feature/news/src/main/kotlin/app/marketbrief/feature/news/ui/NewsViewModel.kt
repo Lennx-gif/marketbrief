@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.marketbrief.core.data.DownloadResult
 import app.marketbrief.core.data.NewsRepository
+import app.marketbrief.core.data.MarketDataRepository
 import app.marketbrief.core.data.RefreshResult
 import app.marketbrief.core.entitlements.EntitlementChecker
 import app.marketbrief.core.entitlements.Feature
 import app.marketbrief.core.entitlements.Gate
 import app.marketbrief.core.entitlements.PlanSource
 import app.marketbrief.core.model.Article
+import app.marketbrief.core.model.AssetClass
+import app.marketbrief.core.model.AssetId
 import app.marketbrief.core.model.Category
 import app.marketbrief.core.model.CountryFilter
 import app.marketbrief.core.model.FeedQuery
@@ -22,7 +25,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -45,7 +51,11 @@ data class FeedUiState(
     val country: CountryFilter = CountryFilter.Global,
     val homeCountryName: String = "Kenya",
     val isRefreshing: Boolean = false,
-    val banner: Banner? = null
+    val banner: Banner? = null,
+    val savedSearchText: String = "",
+    val savedTags: List<String> = emptyList(),
+    val selectedSavedTag: String? = null,
+    val usdKesRate: Double? = null
 )
 
 sealed interface FeedAction {
@@ -67,50 +77,83 @@ sealed interface FeedEvent {
 class NewsViewModel @Inject constructor(
     private val repository: NewsRepository,
     private val prefs: UserPrefsRepository,
+    private val marketData: MarketDataRepository,
     planSource: PlanSource
 ) : ViewModel() {
 
     private val query = MutableStateFlow(FeedQuery())
     private val refreshing = MutableStateFlow(false)
     private val banner = MutableStateFlow<Banner?>(null)
+    private val savedSearch = MutableStateFlow("")
+    private val selectedSavedTag = MutableStateFlow<String?>(null)
     private val gate = EntitlementChecker(planSource.plan)
+    private val usdKes = MutableStateFlow<Double?>(null)
 
     private val _events = Channel<FeedEvent>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()
 
+    private val savedSearchResults = combine(query, savedSearch, selectedSavedTag) { q, text, tag ->
+        if (Category.Saved in q.categories) tag to text else null
+    }.flatMapLatest { search ->
+        when {
+            search == null -> flowOf<List<Article>?>(null)
+            search.first != null -> kotlinx.coroutines.flow.flow { emit(repository.savedArticlesWithTag(search.first!!)) }
+            search.second.isNotBlank() -> kotlinx.coroutines.flow.flow { emit(repository.search(search.second)) }
+            else -> flowOf<List<Article>?>(null)
+        }
+    }
+
     private val feedFlow = combine(
         query.flatMapLatest { repository.observeFeed(it) },
+        savedSearchResults,
         repository.observeBookmarkIds(),
         repository.observeDownloadedIds()
-    ) { articles, saved, downloaded ->
-        articles.map { ArticleUi(it, it.id in saved, it.id in downloaded) }
+    ) { articles, searchResults, saved, downloaded ->
+        (searchResults ?: articles).map { ArticleUi(it, it.id in saved, it.id in downloaded) }
     }
 
     private val metaFlow = combine(
         query,
         prefs.homeCountry,
         refreshing,
-        banner
-    ) { q, homeCountry, isRef, b ->
-        FeedMeta(q, homeCountry, isRef, b)
+        banner,
+        savedSearch
+    ) { q, homeCountry, isRef, b, search ->
+        FeedMeta(q, homeCountry, isRef, b, search)
     }
 
     val uiState: StateFlow<FeedUiState> = combine(
         feedFlow,
-        metaFlow
-    ) { articlesUi, meta ->
+        metaFlow,
+        repository.observeSavedTags(),
+        selectedSavedTag,
+        usdKes
+    ) { articlesUi, meta, tags, tag, rate ->
         FeedUiState(
             articles = articlesUi,
             selectedCategories = meta.query.categories,
             country = meta.query.country,
             homeCountryName = meta.homeCountry,
             isRefreshing = meta.isRefreshing,
-            banner = meta.banner
+            banner = meta.banner,
+            savedSearchText = meta.savedSearch,
+            savedTags = tags,
+            selectedSavedTag = tag,
+            usdKesRate = rate
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FeedUiState())
 
     init {
         refresh()
+        viewModelScope.launch {
+            prefs.kenyaTradeLens.collect { enabled ->
+                if (enabled) {
+                    val usdKesAsset = AssetId("USDKES", AssetClass.FOREX)
+                    marketData.refreshQuotes(listOf(usdKesAsset))
+                    usdKes.value = marketData.quotes.first()[usdKesAsset]?.mid
+                } else usdKes.value = null
+            }
+        }
     }
 
     fun onAction(action: FeedAction) {
@@ -162,6 +205,9 @@ class NewsViewModel @Inject constructor(
         }
     }
 
+    fun onSavedSearchChanged(value: String) { savedSearch.value = value }
+    fun onSavedTagSelected(value: String?) { selectedSavedTag.value = value }
+
     private fun handleBookmarkToggle(article: Article) {
         when (val check = gate.gate(Feature.NEWS_SAVED)) {
             is Gate.Open -> {
@@ -211,5 +257,6 @@ private data class FeedMeta(
     val query: FeedQuery,
     val homeCountry: String,
     val isRefreshing: Boolean,
-    val banner: Banner?
+    val banner: Banner?,
+    val savedSearch: String
 )

@@ -8,14 +8,35 @@ import androidx.room.RoomDatabase
         ArticleEntity::class,
         BookmarkEntity::class,
         DownloadEntity::class,
-        ArticleBodyEntity::class
+        ArticleBodyEntity::class,
+        PresetEntity::class,
+        TradeLogEntity::class,
+        JournalEntryEntity::class,
+        JournalHeadlineEntity::class,
+        AccountSettingsEntity::class,
+        CalendarEventEntity::class,
+        PriceAlertEntity::class,
+        ArticleTagEntity::class,
+        SourcePrefEntity::class,
+        ArticleFtsEntity::class,
+        ArticleBodyFtsEntity::class,
+        RateCacheEntity::class
     ],
-    version = 2,
-    exportSchema = false
+    version = 5,
+    exportSchema = true
 )
 abstract class MarketBriefDatabase : RoomDatabase() {
     abstract fun articleDao(): ArticleDao
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun downloadDao(): DownloadDao
     abstract fun articleBodyDao(): ArticleBodyDao
+    abstract fun presetDao(): PresetDao
+    abstract fun tradeLogDao(): TradeLogDao
+    abstract fun journalDao(): JournalDao
+    abstract fun calendarDao(): CalendarDao
+    abstract fun priceAlertDao(): PriceAlertDao
+    abstract fun articleSearchDao(): ArticleSearchDao
+    abstract fun sourcePrefDao(): SourcePrefDao
+    abstract fun articleTagDao(): ArticleTagDao
+    abstract fun rateCacheDao(): RateCacheDao
 }

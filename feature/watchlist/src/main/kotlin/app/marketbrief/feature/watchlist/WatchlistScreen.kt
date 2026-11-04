@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.StarOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -32,10 +33,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +68,9 @@ fun WatchlistScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
+    var alertSymbol by remember { mutableStateOf<String?>(null) }
+    var alertTarget by remember { mutableStateOf("") }
+    var showCalendarDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
@@ -132,7 +136,8 @@ fun WatchlistScreen(
                         WatchlistItemRow(
                             item = item,
                             onRemove = { viewModel.removeItem(item.symbol) },
-                            onSizeTrade = { onNavigateToCalculator(item.symbol) }
+                            onSizeTrade = { onNavigateToCalculator(item.symbol) },
+                            onAddAlert = { alertTarget = ""; alertSymbol = item.symbol }
                         )
                         if (index < uiState.watchlistItems.lastIndex) {
                             AppleHairlineDivider(modifier = Modifier.padding(start = 16.dp))
@@ -142,7 +147,19 @@ fun WatchlistScreen(
             }
 
             // Economic Calendar Section
-            EconomicCalendarSection(events = uiState.economicEvents)
+            EconomicCalendarSection(events = uiState.economicEvents, onAdd = { showCalendarDialog = true })
+            uiState.calendarMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+            uiState.alertMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+            if (uiState.priceAlerts.isNotEmpty()) {
+                AppleGroupedSection {
+                    uiState.priceAlerts.forEach { alert ->
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("${alert.symbol} ${alert.direction.lowercase()} ${alert.targetPrice}")
+                            TextButton(onClick = { viewModel.deletePriceAlert(alert.id) }) { Text("Remove") }
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
         }
@@ -155,13 +172,60 @@ fun WatchlistScreen(
             onDismiss = { showAddDialog = false }
         )
     }
+
+    alertSymbol?.let { symbol ->
+        AlertDialog(
+            onDismissRequest = { alertSymbol = null },
+            title = { Text("Price alert · $symbol") },
+            text = { OutlinedTextField(value = alertTarget, onValueChange = { alertTarget = it }, label = { Text("Target price") }) },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { viewModel.addPriceAlert(symbol, alertTarget, app.marketbrief.core.data.AlertDirection.ABOVE); alertSymbol = null }) { Text("Above") }
+                    TextButton(onClick = { viewModel.addPriceAlert(symbol, alertTarget, app.marketbrief.core.data.AlertDirection.BELOW); alertSymbol = null }) { Text("Below") }
+                }
+            },
+            dismissButton = { TextButton(onClick = { alertSymbol = null }) { Text("Cancel") } }
+        )
+    }
+
+    if (showCalendarDialog) {
+        var title by remember { mutableStateOf("") }
+        var currency by remember { mutableStateOf("USD") }
+        var instant by remember { mutableStateOf("") }
+        var impact by remember { mutableStateOf("HIGH") }
+        var csv by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showCalendarDialog = false },
+            title = { Text("Calendar events") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Add one event using an ISO-8601 time, or paste CSV columns title,currency,instant,impact.")
+                    OutlinedTextField(title, { title = it }, label = { Text("Event title") })
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(currency, { currency = it }, label = { Text("Currency") }, modifier = Modifier.weight(1f))
+                        OutlinedTextField(impact, { impact = it.uppercase() }, label = { Text("Impact") }, modifier = Modifier.weight(1f))
+                    }
+                    OutlinedTextField(instant, { instant = it }, label = { Text("2026-11-04T08:00:00Z") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(csv, { csv = it }, label = { Text("CSV import") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                }
+            },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { viewModel.addCalendarEvent(title, currency, instant, impact); showCalendarDialog = false }) { Text("Add event") }
+                    TextButton(onClick = { viewModel.importCalendarCsv(csv); showCalendarDialog = false }) { Text("Import CSV") }
+                }
+            },
+            dismissButton = { TextButton(onClick = { showCalendarDialog = false }) { Text("Cancel") } }
+        )
+    }
 }
 
 @Composable
 fun WatchlistItemRow(
     item: WatchlistItem,
     onRemove: () -> Unit,
-    onSizeTrade: () -> Unit
+    onSizeTrade: () -> Unit,
+    onAddAlert: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -206,6 +270,9 @@ fun WatchlistItemRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            IconButton(onClick = onAddAlert, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Default.NotificationsActive, contentDescription = "Add price alert", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            }
             // Price & Change
             Column(horizontalAlignment = Alignment.End) {
                 Text(
@@ -391,9 +458,9 @@ fun AddInstrumentDialog(
 }
 
 @Composable
-fun EconomicCalendarSection(events: List<EconomicEvent>) {
-    if (events.isNotEmpty()) {
+fun EconomicCalendarSection(events: List<EconomicEvent>, onAdd: () -> Unit = {}) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "ECONOMIC CALENDAR",
                 fontSize = 12.sp,
@@ -402,8 +469,17 @@ fun EconomicCalendarSection(events: List<EconomicEvent>) {
                 letterSpacing = 0.8.sp,
                 modifier = Modifier.padding(start = 4.dp)
             )
+            TextButton(onClick = onAdd) { Text("Add / import") }
+            }
+
+            val next = events.filter { it.impact.equals("HIGH", true) && it.instant >= System.currentTimeMillis() }.minByOrNull { it.instant }
+            next?.let { event ->
+                val minutes = ((event.instant - System.currentTimeMillis()) / 60_000L).coerceAtLeast(0)
+                Text("Next high-impact event: ${event.title} · ${minutes / 60}h ${minutes % 60}m", color = MaterialTheme.colorScheme.primary)
+            }
 
             AppleGroupedSection {
+                if (events.isEmpty()) Text("No events yet. Add one manually or import a CSV.", modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 events.forEachIndexed { index, event ->
                     EconomicEventRow(event = event)
                     if (index < events.lastIndex) {
@@ -412,7 +488,6 @@ fun EconomicCalendarSection(events: List<EconomicEvent>) {
                 }
             }
         }
-    }
 }
 
 @Composable

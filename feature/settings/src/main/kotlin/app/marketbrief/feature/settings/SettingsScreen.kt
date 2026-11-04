@@ -1,5 +1,9 @@
 package app.marketbrief.feature.settings
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -66,6 +71,11 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showMyfxbookDialog by remember { mutableStateOf(false) }
+    var digestTimeDraft by rememberSaveable(uiState.digestTime) { mutableStateOf(uiState.digestTime) }
+    var quietHoursDraft by rememberSaveable(uiState.quietHours) { mutableStateOf(uiState.quietHours) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) viewModel.setHeadlinesNotif(true)
+    }
 
     if (showMyfxbookDialog) {
         MyfxbookLoginDialog(
@@ -151,6 +161,80 @@ fun SettingsScreen(
                                 )
                             }
                         }
+                        Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Kenya trade lens", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                Text("Adds one Kenya-focused NewsAPI request per home refresh", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(checked = uiState.kenyaTradeLens, onCheckedChange = viewModel::setKenyaTradeLens)
+                        }
+                    }
+                }
+            }
+
+            item {
+                SettingsSectionHeader(title = "CALCULATOR")
+                AppleGroupedSection {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Account currency · ${uiState.accountCurrency}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(listOf("USD", "EUR", "GBP", "KES", "JPY", "CAD", "AUD", "CHF")) { currency ->
+                                ApplePillChip(currency, currency == uiState.accountCurrency, onClick = { viewModel.setAccountCurrency(currency) })
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Section 2: Daily Request Quota
+            item {
+                SettingsSectionHeader(title = "DAILY DIGEST")
+                AppleGroupedSection {
+                    Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Daily market digest", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                            Text("One scheduled summary each day", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(checked = uiState.headlinesNotif, onCheckedChange = { enabled ->
+                            if (enabled && Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            else viewModel.setHeadlinesNotif(enabled)
+                        })
+                    }
+                    AppleHairlineDivider()
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Time (Africa/Nairobi)", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(value = digestTimeDraft, onValueChange = { digestTimeDraft = it }, label = { Text("HH:mm") }, modifier = Modifier.weight(1f), singleLine = true)
+                            Button(onClick = { viewModel.setDigestTime(digestTimeDraft) }, enabled = digestTimeDraft.matches(Regex("([01]\\d|2[0-3]):[0-5]\\d"))) { Text("Save") }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Home-country headlines only", fontSize = 14.sp)
+                            Switch(checked = uiState.homeOnlyDigest, onCheckedChange = viewModel::setHomeOnlyDigest)
+                        }
+                        OutlinedTextField(value = quietHoursDraft, onValueChange = { quietHoursDraft = it }, label = { Text("Quiet hours (HH:mm-HH:mm)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                        TextButton(onClick = { viewModel.setQuietHours(quietHoursDraft) }) { Text("Save quiet hours") }
+                    }
+                }
+            }
+
+            item {
+                SettingsSectionHeader(title = "NEWS SOURCES")
+                AppleGroupedSection {
+                    if (uiState.sources.isEmpty()) {
+                        Text("Sources appear here after headlines load.", modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else uiState.sources.forEachIndexed { index, source ->
+                        val current = uiState.sourcePreferences[source] ?: "NORMAL"
+                        Row(Modifier.fillMaxWidth().clickable {
+                            val next = when (current) { "NORMAL" -> "BOOST"; "BOOST" -> "MUTE"; else -> "NORMAL" }
+                            viewModel.setSourcePreference(source, next)
+                        }.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(source, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
+                            ApplePillChip(text = current.lowercase().replaceFirstChar { it.uppercase() }, isSelected = current != "NORMAL", onClick = {
+                                val next = when (current) { "NORMAL" -> "BOOST"; "BOOST" -> "MUTE"; else -> "NORMAL" }
+                                viewModel.setSourcePreference(source, next)
+                            })
+                        }
+                        if (index < uiState.sources.lastIndex) AppleHairlineDivider(modifier = Modifier.padding(start = 16.dp))
                     }
                 }
             }
@@ -207,6 +291,8 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 16.sp
                         )
+                        Text("Twelve Data: ${uiState.twelveDataRemaining} / 800 credits remaining", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Myfxbook: ${uiState.myfxbookRemaining} / 100 requests remaining", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

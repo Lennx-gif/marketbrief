@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.marketbrief.core.analysis.MarketAnalyzer
 import app.marketbrief.core.analysis.MarketSnapshot
+import app.marketbrief.core.analysis.DivergenceDetector
+import app.marketbrief.core.analysis.DivergenceInput
+import app.marketbrief.core.analysis.DivergenceLabel
 import app.marketbrief.core.analysis.sentiment.SentimentAggregator
 import app.marketbrief.core.data.MarketDataRepository
 import app.marketbrief.core.data.NewsRepository
@@ -52,7 +55,8 @@ data class AnalysisUiState(
     // Myfxbook crowd positioning
     val crowdConnected: Boolean = false,
     val crowd: List<CrowdPosition> = emptyList(),
-    val crowdError: String? = null
+    val crowdError: String? = null,
+    val divergences: Map<String, String> = emptyMap()
 )
 
 @HiltViewModel
@@ -139,9 +143,25 @@ class AnalysisViewModel @Inject constructor(
             isLoading = techData.loading,
             crowdConnected = crowdData.connected,
             crowd = crowdData.positions,
-            crowdError = crowdData.error
+            crowdError = crowdData.error,
+            divergences = buildDivergences(sentData.sentiments, crowdData.positions)
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalysisUiState(availableAssets = availableAssets))
+
+    private fun buildDivergences(sentiments: Map<String, app.marketbrief.core.model.Sentiment>, crowd: List<CrowdPosition>): Map<String, String> {
+        val crowdBySymbol = crowd.associateBy { if (it.symbol == "XAUUSD") "XAU" else it.symbol }
+        return sentiments.mapNotNull { (symbol, sentiment) ->
+            val positioning = crowdBySymbol[symbol] ?: return@mapNotNull null
+            val label = DivergenceDetector.detect(DivergenceInput(sentiment.score.toDouble(), sentiment.headlineCount, positioning.longPercent)) ?: return@mapNotNull null
+            val wording = when (label) {
+                DivergenceLabel.CROWD_LONG_BULLISH_NEWS -> "Crowd long with bullish news"
+                DivergenceLabel.CROWD_SHORT_BULLISH_NEWS -> "Crowd short against bullish news"
+                DivergenceLabel.CROWD_LONG_BEARISH_NEWS -> "Crowd long against bearish news"
+                DivergenceLabel.CROWD_SHORT_BEARISH_NEWS -> "Crowd short with bearish news"
+            }
+            symbol to wording
+        }.toMap()
+    }
 
     init {
         loadTechnicalSnapshot("EURUSD", "H1")

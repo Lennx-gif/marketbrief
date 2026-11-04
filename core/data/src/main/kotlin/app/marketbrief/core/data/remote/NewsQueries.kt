@@ -11,6 +11,8 @@ object NewsQueries {
 
     fun homeTrade(country: String): String = "\"$country\" AND $TRADE"
 
+    fun kenyaTrade(): String = "(Kenya OR \"Central Bank of Kenya\" OR KES OR shilling OR \"Nairobi Securities Exchange\" OR EAC OR AfCFTA OR \"Mombasa port\") AND $TRADE"
+
     fun forCategory(c: Category): String = when (c) {
         Category.Finance -> "(markets OR inflation OR \"interest rates\" OR \"central bank\")"
         Category.Forex -> "(forex OR currency OR dollar OR euro OR yen OR sterling)"

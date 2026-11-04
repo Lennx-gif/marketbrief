@@ -21,12 +21,14 @@ import app.marketbrief.ui.components.BottomNavBar
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.currentBackStackEntryAsState
 import app.marketbrief.core.storage.db.ArticleDao
 import app.marketbrief.core.storage.db.BookmarkDao
 import app.marketbrief.core.storage.db.DownloadDao
 import app.marketbrief.feature.news.ui.ArticleDetailScreen
+import app.marketbrief.feature.journal.JournalScreen
 import app.marketbrief.feature.settings.SettingsScreen
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -45,7 +47,9 @@ interface AppNavHostEntryPoint {
 @Composable
 fun AppNavHost(
     modifier: Modifier = Modifier,
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    openArticleId: String? = null,
+    openCalculatorSymbol: String? = null
 ) {
     val planSource = PlanSourceImpl()
     val plan = planSource.plan
@@ -59,6 +63,13 @@ fun AppNavHost(
         "calculator?symbol={symbol}",
         "watchlist"
     )
+
+    LaunchedEffect(openArticleId) {
+        if (!openArticleId.isNullOrBlank()) navController.navigate("article/$openArticleId")
+    }
+    LaunchedEffect(openCalculatorSymbol) {
+        if (!openCalculatorSymbol.isNullOrBlank()) navController.navigate("calculator?symbol=$openCalculatorSymbol")
+    }
 
     Scaffold(
         modifier = modifier,
@@ -135,8 +146,9 @@ fun AppNavHost(
                 )
             ) { backStackEntry ->
                 val symbol = backStackEntry.arguments?.getString("symbol") ?: ""
-                CalculatorScreen(initialSymbol = symbol)
+                CalculatorScreen(initialSymbol = symbol, onOpenJournal = { navController.navigate("journal") })
             }
+            composable("journal") { JournalScreen(onBack = { navController.popBackStack() }) }
             composable("analysis") {
                 AnalysisScreen()
             }

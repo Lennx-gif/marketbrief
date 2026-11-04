@@ -199,6 +199,20 @@ fun SentimentSection(
         // Crowd Positioning (Myfxbook Community Outlook)
         item { CrowdPositioningSection(uiState = uiState) }
 
+        item {
+            Text("SENTIMENT VS CROWD", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AppleGroupedSection {
+                if (uiState.divergences.isEmpty()) {
+                    Text("No divergence label yet. At least five headlines and a 65% / 35% crowd skew are required.", modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else uiState.divergences.forEach { (symbol, label) ->
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(symbol, fontWeight = FontWeight.SemiBold)
+                        Text(label, modifier = Modifier.weight(1f).padding(start = 12.dp), color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
+
         // Category Headline Volume Breakdown
         if (uiState.showVolume && uiState.categoryVolumes.isNotEmpty()) {
             item {

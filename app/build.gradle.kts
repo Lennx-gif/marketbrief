@@ -9,7 +9,6 @@ plugins {
     alias(libs.plugins.compose.compiler)
     id("org.jetbrains.kotlin.kapt")
 }
-
 val localProperties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
@@ -89,6 +88,7 @@ dependencies {
     implementation(project(":feature:analysis"))
     implementation(project(":feature:watchlist"))
     implementation(project(":feature:settings"))
+    implementation(project(":feature:journal"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -106,11 +106,13 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.workmanager.runtime)
+    implementation(libs.hilt.work)
     implementation(libs.datastore.preferences)
     implementation(libs.coil.compose)
     implementation(libs.ktor.client.core)
     implementation("androidx.appcompat:appcompat:1.7.0")
     kapt(libs.hilt.compiler)
+    kapt(libs.hilt.work.compiler)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
@@ -127,7 +129,11 @@ kapt {
     correctErrorTypes = true
 }
 
+val kaptTempDirectory = layout.buildDirectory.dir("tmp/kapt").get().asFile
 tasks.withType<org.jetbrains.kotlin.gradle.internal.KaptWithoutKotlincTask>().configureEach {
-    kaptProcessJvmArgs.add("-Djava.io.tmpdir=C:/Users/mysti/AppData/Local/Temp")
-    kaptProcessJvmArgs.add("-Dorg.sqlite.tmpdir=C:/Users/mysti/AppData/Local/Temp")
+    doFirst { kaptTempDirectory.mkdirs() }
+    kaptProcessJvmArgs.add("-Djava.io.tmpdir=${kaptTempDirectory.absolutePath}")
+    kaptProcessJvmArgs.add("-Dorg.sqlite.tmpdir=${kaptTempDirectory.absolutePath}")
 }
+
+\r\n

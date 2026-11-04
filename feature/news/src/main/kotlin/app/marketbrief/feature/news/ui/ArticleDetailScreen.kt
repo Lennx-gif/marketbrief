@@ -43,6 +43,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -98,6 +100,8 @@ fun ArticleDetailScreen(
     var isDownloaded by remember { mutableStateOf(false) }
     var isLoadingBody by remember { mutableStateOf(false) }
     var isDownloadingOffline by remember { mutableStateOf(false) }
+    var articleTags by remember { mutableStateOf(emptyList<String>()) }
+    var tagDraft by remember { mutableStateOf("") }
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/markdown")
@@ -119,6 +123,7 @@ fun ArticleDetailScreen(
         article = entity?.toDomain()
         isBookmarked = bookmarkDao.isBookmarked(articleId)
         isDownloaded = downloadDao.getDownload(articleId) != null
+        articleTags = newsRepository.articleTags(articleId)
 
         // Load or extract article body
         val cached = newsRepository.getArticleBody(articleId)
@@ -392,6 +397,18 @@ fun ArticleDetailScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Bottom Action Buttons: Offline Save & Position Sizing
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    articleTags.forEach { tag ->
+                        Text(tag, modifier = Modifier.clickable {
+                            coroutineScope.launch { newsRepository.setArticleTag(currentArticle.id, tag, false); articleTags = articleTags - tag }
+                        }.padding(6.dp), color = MaterialTheme.colorScheme.primary)
+                    }
+                    OutlinedTextField(value = tagDraft, onValueChange = { tagDraft = it }, label = { Text("Add tag") }, modifier = Modifier.weight(1f), singleLine = true)
+                    TextButton(onClick = {
+                        val tag = tagDraft.trim()
+                        if (tag.isNotBlank()) coroutineScope.launch { newsRepository.setArticleTag(currentArticle.id, tag, true); articleTags = (articleTags + tag).distinct(); tagDraft = "" }
+                    }) { Text("Add") }
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)

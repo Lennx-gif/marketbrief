@@ -34,6 +34,7 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:risk"))
     implementation(project(":core:data"))
+    implementation(project(":core:storage"))
     implementation(project(":core:ui"))
     implementation(project(":core:entitlements"))
     implementation(libs.androidx.core.ktx)

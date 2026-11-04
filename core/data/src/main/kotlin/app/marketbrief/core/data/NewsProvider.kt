@@ -57,6 +57,13 @@ interface NewsRepository {
     fun observeArticleBody(articleId: String): Flow<app.marketbrief.core.model.ArticleBody?>
     suspend fun getArticleBody(articleId: String): app.marketbrief.core.model.ArticleBody?
     suspend fun extractArticleBody(articleId: String): Result<app.marketbrief.core.model.ArticleBody>
+    fun observeSourcePreferences(): Flow<Map<String, String>> = kotlinx.coroutines.flow.flowOf(emptyMap())
+    fun observeAvailableSources(): Flow<List<String>> = kotlinx.coroutines.flow.flowOf(emptyList())
+    suspend fun setSourcePreference(source: String, weight: String) = Unit
+    suspend fun articleTags(articleId: String): List<String> = emptyList()
+    suspend fun setArticleTag(articleId: String, tag: String, enabled: Boolean) = Unit
+    fun observeSavedTags(): Flow<List<String>> = kotlinx.coroutines.flow.flowOf(emptyList())
+    suspend fun savedArticlesWithTag(tag: String): List<Article> = emptyList()
 
     // Compatibility default delegates
     val articles: Flow<List<Article>>
@@ -72,4 +79,20 @@ interface NewsRepository {
 
     suspend fun saveArticle(article: Article) = setBookmarked(article.id, true)
     suspend fun unsaveArticle(articleId: String) = setBookmarked(articleId, false)
+}
+
+/** App-layer hook for scheduling follow-up work after a successful foreground refresh. */
+interface NewsRefreshScheduler {
+    suspend fun schedulePrefetch()
+}
+
+interface DailyDigestScheduler { suspend fun reschedule(enabled: Boolean, time: String) }
+
+object NoOpNewsRefreshScheduler : NewsRefreshScheduler {
+    override suspend fun schedulePrefetch() = Unit
+}
+
+object TopArticleSelector {
+    fun select(articles: List<Article>, articleIdsWithFreshBodies: Set<String>, limit: Int = 3): List<Article> =
+        articles.asSequence().filterNot { it.id in articleIdsWithFreshBodies }.take(limit).toList()
 }

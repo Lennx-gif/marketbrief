@@ -17,8 +17,9 @@ interface RateRepository {
     val rates: Flow<PairRateTable>
     val lastUpdated: Flow<Long>
     
-    suspend fun refresh()
+    suspend fun refresh(requiredPairs: Set<String> = emptySet())
     fun getRate(from: CurrencyCode, to: CurrencyCode): Double?
+    suspend fun getQuote(symbol: String): Double? = null
 }
 
 /**
@@ -57,3 +58,5 @@ interface MarketDataRepository {
 
     suspend fun searchSymbols(query: String): Result<List<AssetId>>
 }
+
+fun interface PriceAlertNotifier { fun notify(alertId: String, symbol: String, target: String) }

@@ -40,25 +40,25 @@ class InstrumentTest {
 
     @Test
     fun unknownSymbol_isNotGuessedAsForex() {
-        assertNull(InstrumentCatalog.default().find("BTCUSD"))
+        assertNull(InstrumentCatalog.default().find("DOGEUSD"))
     }
 
     @Test
     fun withInstrument_addsWithoutMutatingOriginal() {
         val original = InstrumentCatalog.default()
-        val btc = Instrument(
-            symbol = "BTCUSD",
+        val doge = Instrument(
+            symbol = "DOGEUSD",
             assetClass = AssetClass.CRYPTO,
             quoteCurrency = CurrencyCode("USD"),
-            baseCurrency = CurrencyCode("BTC"),
+            baseCurrency = CurrencyCode("DOGE"),
             pipSize = BigDecimal("1"),
             contractSize = BigDecimal("1"),
             lotStep = BigDecimal("0.001"),
             minLot = BigDecimal("0.001"),
         )
-        val extended = original.withInstrument(btc)
-        assertNotNull(extended.find("BTC/USD"))
-        assertNull(original.find("BTCUSD"))
+        val extended = original.withInstrument(doge)
+        assertNotNull(extended.find("DOGE/USD"))
+        assertNull(original.find("DOGEUSD"))
     }
 
     @Test(expected = IllegalArgumentException::class)
