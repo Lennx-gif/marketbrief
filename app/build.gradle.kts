@@ -136,4 +136,3 @@ tasks.withType<org.jetbrains.kotlin.gradle.internal.KaptWithoutKotlincTask>().co
     kaptProcessJvmArgs.add("-Dorg.sqlite.tmpdir=${kaptTempDirectory.absolutePath}")
 }
 
-\r\n
