@@ -7,6 +7,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
+import app.marketbrief.core.model.Category
+import app.marketbrief.core.model.CountryFilter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -17,6 +20,42 @@ import javax.inject.Singleton
 class UserPrefsRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>
 ) {
+
+    val feedCategories: Flow<Set<Category>> = dataStore.data.map { prefs ->
+        val saved = prefs[KEY_FEED_CATEGORIES].orEmpty()
+            .mapNotNull { name -> Category.entries.firstOrNull { it.name == name } }
+            .toSet()
+        when {
+            saved.isEmpty() -> setOf(Category.All)
+            Category.Saved in saved -> setOf(Category.Saved)
+            else -> saved
+        }
+    }
+
+    val feedCountry: Flow<CountryFilter> = dataStore.data.map { prefs ->
+        when (prefs[KEY_FEED_COUNTRY_MODE] ?: "GLOBAL") {
+            "HOME" -> CountryFilter.Home
+            "ONLY" -> CountryFilter.Only(prefs[KEY_FEED_COUNTRIES].orEmpty())
+            else -> CountryFilter.Global
+        }
+    }
+
+    val showSourceStrip: Flow<Boolean> = dataStore.data.map { it[KEY_SHOW_SOURCE_STRIP] ?: false }
+    val showMarketTickerOnFeed: Flow<Boolean> = dataStore.data.map { it[KEY_FEED_TICKER] ?: false }
+    val inAppArticleFallback: Flow<Boolean> = dataStore.data.map { it[KEY_IN_APP_ARTICLE_FALLBACK] ?: true }
+
+    val watchlistSortOrder: Flow<String> = dataStore.data.map { it[KEY_WATCHLIST_SORT] ?: "MANUAL" }
+    val watchlistViewMode: Flow<String> = dataStore.data.map { it[KEY_WATCHLIST_VIEW] ?: "DETAILED" }
+    val calendarImpactFilter: Flow<String> = dataStore.data.map { it[KEY_CALENDAR_IMPACT] ?: "ALL" }
+    val watchlistExpanded: Flow<Boolean> = dataStore.data.map { it[KEY_WATCHLIST_EXPANDED] ?: true }
+    val calendarExpanded: Flow<Boolean> = dataStore.data.map { it[KEY_CALENDAR_EXPANDED] ?: true }
+    val alertsExpanded: Flow<Boolean> = dataStore.data.map { it[KEY_ALERTS_EXPANDED] ?: true }
+    val watchlistSeeded: Flow<Boolean> = dataStore.data.map { it[KEY_WATCHLIST_SEEDED] ?: false }
+
+    val selectedJournalAccountId: Flow<Long?> = dataStore.data.map { it[KEY_JOURNAL_ACCOUNT_ID] }
+    val selectedJournalTab: Flow<String> = dataStore.data.map { it[KEY_JOURNAL_TAB] ?: "TRADES" }
+    val journalStatusFilter: Flow<String> = dataStore.data.map { it[KEY_JOURNAL_STATUS_FILTER] ?: "ALL" }
+    val journalDateRange: Flow<String> = dataStore.data.map { it[KEY_JOURNAL_DATE_RANGE] ?: "ALL" }
 
     val homeCountry: Flow<String> = dataStore.data.map { prefs ->
         prefs[KEY_HOME_COUNTRY] ?: "Kenya"
@@ -86,6 +125,52 @@ class UserPrefsRepository @Inject constructor(
     suspend fun setHomeCountry(country: String) {
         dataStore.edit { it[KEY_HOME_COUNTRY] = country }
     }
+
+    suspend fun setFeedCategories(categories: Set<Category>) {
+        val normalized = when {
+            categories.isEmpty() -> setOf(Category.All)
+            Category.Saved in categories -> setOf(Category.Saved)
+            else -> categories
+        }
+        dataStore.edit { it[KEY_FEED_CATEGORIES] = normalized.map { category -> category.name }.toSet() }
+    }
+
+    suspend fun setFeedCountry(country: CountryFilter) {
+        dataStore.edit { prefs ->
+            when (country) {
+                CountryFilter.Global -> {
+                    prefs[KEY_FEED_COUNTRY_MODE] = "GLOBAL"
+                    prefs.remove(KEY_FEED_COUNTRIES)
+                }
+                CountryFilter.Home -> {
+                    prefs[KEY_FEED_COUNTRY_MODE] = "HOME"
+                    prefs.remove(KEY_FEED_COUNTRIES)
+                }
+                is CountryFilter.Only -> {
+                    prefs[KEY_FEED_COUNTRY_MODE] = "ONLY"
+                    prefs[KEY_FEED_COUNTRIES] = country.isoCodes
+                }
+            }
+        }
+    }
+
+    suspend fun setShowSourceStrip(enabled: Boolean) { dataStore.edit { it[KEY_SHOW_SOURCE_STRIP] = enabled } }
+    suspend fun setShowMarketTickerOnFeed(enabled: Boolean) { dataStore.edit { it[KEY_FEED_TICKER] = enabled } }
+    suspend fun setInAppArticleFallback(enabled: Boolean) { dataStore.edit { it[KEY_IN_APP_ARTICLE_FALLBACK] = enabled } }
+
+    suspend fun setWatchlistSortOrder(value: String) { dataStore.edit { it[KEY_WATCHLIST_SORT] = value } }
+    suspend fun setWatchlistViewMode(value: String) { dataStore.edit { it[KEY_WATCHLIST_VIEW] = value } }
+    suspend fun setCalendarImpactFilter(value: String) { dataStore.edit { it[KEY_CALENDAR_IMPACT] = value } }
+    suspend fun setWatchlistExpanded(value: Boolean) { dataStore.edit { it[KEY_WATCHLIST_EXPANDED] = value } }
+    suspend fun setCalendarExpanded(value: Boolean) { dataStore.edit { it[KEY_CALENDAR_EXPANDED] = value } }
+    suspend fun setAlertsExpanded(value: Boolean) { dataStore.edit { it[KEY_ALERTS_EXPANDED] = value } }
+    suspend fun setWatchlistSeeded() { dataStore.edit { it[KEY_WATCHLIST_SEEDED] = true } }
+
+    suspend fun setSelectedJournalAccountId(value: Long) { dataStore.edit { it[KEY_JOURNAL_ACCOUNT_ID] = value } }
+    suspend fun clearSelectedJournalAccountId() { dataStore.edit { it.remove(KEY_JOURNAL_ACCOUNT_ID) } }
+    suspend fun setSelectedJournalTab(value: String) { dataStore.edit { it[KEY_JOURNAL_TAB] = value } }
+    suspend fun setJournalStatusFilter(value: String) { dataStore.edit { it[KEY_JOURNAL_STATUS_FILTER] = value } }
+    suspend fun setJournalDateRange(value: String) { dataStore.edit { it[KEY_JOURNAL_DATE_RANGE] = value } }
 
     suspend fun setThemeMode(mode: String) {
         dataStore.edit { it[KEY_THEME_MODE] = mode }
@@ -160,6 +245,25 @@ class UserPrefsRepository @Inject constructor(
         val KEY_HOME_ONLY_DIGEST = booleanPreferencesKey("home_only_digest")
         val KEY_QUIET_HOURS = stringPreferencesKey("quiet_hours")
         val KEY_KENYA_LENS = booleanPreferencesKey("kenya_trade_lens")
+        val KEY_FEED_CATEGORIES = stringSetPreferencesKey("feed_categories")
+        val KEY_FEED_COUNTRY_MODE = stringPreferencesKey("feed_country_mode")
+        val KEY_FEED_COUNTRIES = stringSetPreferencesKey("feed_countries")
+        val KEY_SHOW_SOURCE_STRIP = booleanPreferencesKey("show_source_strip")
+        val KEY_FEED_TICKER = booleanPreferencesKey("show_market_ticker_on_feed")
+        val KEY_IN_APP_ARTICLE_FALLBACK = booleanPreferencesKey("in_app_article_fallback")
+
+        val KEY_WATCHLIST_SORT = stringPreferencesKey("watchlist_sort")
+        val KEY_WATCHLIST_VIEW = stringPreferencesKey("watchlist_view")
+        val KEY_CALENDAR_IMPACT = stringPreferencesKey("calendar_impact_filter")
+        val KEY_WATCHLIST_EXPANDED = booleanPreferencesKey("watchlist_expanded")
+        val KEY_CALENDAR_EXPANDED = booleanPreferencesKey("calendar_expanded")
+        val KEY_ALERTS_EXPANDED = booleanPreferencesKey("alerts_expanded")
+        val KEY_WATCHLIST_SEEDED = booleanPreferencesKey("watchlist_seeded")
+
+        val KEY_JOURNAL_ACCOUNT_ID = longPreferencesKey("journal_account_id")
+        val KEY_JOURNAL_TAB = stringPreferencesKey("journal_tab")
+        val KEY_JOURNAL_STATUS_FILTER = stringPreferencesKey("journal_status_filter")
+        val KEY_JOURNAL_DATE_RANGE = stringPreferencesKey("journal_date_range")
 
         private fun providerCountKey(provider: String) = intPreferencesKey("${provider.lowercase()}_budget_count")
         private fun providerDayKey(provider: String) = longPreferencesKey("${provider.lowercase()}_budget_day")

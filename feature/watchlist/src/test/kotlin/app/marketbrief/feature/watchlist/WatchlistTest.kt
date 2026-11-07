@@ -6,6 +6,9 @@ import app.marketbrief.core.data.EconomicCalendarProvider
 import app.marketbrief.core.data.CalendarEvent
 import app.marketbrief.core.storage.db.PriceAlertDao
 import app.marketbrief.core.storage.db.PriceAlertEntity
+import app.marketbrief.core.storage.UserPrefsRepository
+import app.marketbrief.core.storage.db.WatchlistDao
+import app.marketbrief.core.storage.db.WatchlistItemEntity
 import app.marketbrief.core.model.AssetClass
 import app.marketbrief.core.model.AssetId
 import app.marketbrief.core.model.Candle
@@ -18,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -26,6 +30,8 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.Assert.*
+import io.mockk.every
+import io.mockk.mockk
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WatchlistTest {
@@ -54,7 +60,27 @@ class WatchlistTest {
         private val state = MutableStateFlow<List<CalendarEvent>>(emptyList())
         override fun observeEvents() = state
         override suspend fun add(event: CalendarEvent) { state.value = state.value + event }
-        override suspend fun importCsv(csv: String) = 0
+    }
+    private val watchlistDao = object : WatchlistDao {
+        private val state = MutableStateFlow<List<WatchlistItemEntity>>(emptyList())
+        override fun observeAll(): Flow<List<WatchlistItemEntity>> = state
+        override suspend fun all(): List<WatchlistItemEntity> = state.value
+        override suspend fun upsert(items: List<WatchlistItemEntity>) {
+            state.value = (state.value.filterNot { current -> items.any { it.symbol == current.symbol } } + items)
+                .sortedBy { it.position }
+        }
+        override suspend fun delete(symbol: String) { state.value = state.value.filterNot { it.symbol == symbol } }
+        override suspend fun clear() { state.value = emptyList() }
+    }
+    private val prefs = mockk<UserPrefsRepository>(relaxed = true) {
+        every { watchlistSeeded } returns flowOf(false)
+        every { watchlistSortOrder } returns flowOf("MANUAL")
+        every { watchlistViewMode } returns flowOf("DETAILED")
+        every { calendarImpactFilter } returns flowOf("ALL")
+        every { watchlistExpanded } returns flowOf(true)
+        every { calendarExpanded } returns flowOf(true)
+        every { alertsExpanded } returns flowOf(true)
+        every { providerBudgetRemaining("twelve_data", 800) } returns flowOf(800)
     }
 
     @Before
@@ -91,7 +117,7 @@ class WatchlistTest {
 
     @Test
     fun testWatchlistViewModelInitialState() = runTest {
-        val viewModel = WatchlistViewModel(fakeMarketData, alertDao, notifier, calendar)
+        val viewModel = WatchlistViewModel(fakeMarketData, alertDao, notifier, calendar, watchlistDao, prefs)
         
         val state = viewModel.uiState.value
         assertNotNull(state)
@@ -101,7 +127,7 @@ class WatchlistTest {
 
     @Test
     fun testWatchlistViewModelAddAndRemoveItem() = runTest {
-        val viewModel = WatchlistViewModel(fakeMarketData, alertDao, notifier, calendar)
+        val viewModel = WatchlistViewModel(fakeMarketData, alertDao, notifier, calendar, watchlistDao, prefs)
         val initialCount = viewModel.uiState.value.watchlistItems.size
         
         viewModel.addItem("ETHUSD")
@@ -145,13 +171,30 @@ class WatchlistTest {
 
     @Test
     fun testLiveQuoteUpdatesPriceAndDirection() = runTest {
-        val viewModel = WatchlistViewModel(fakeMarketData, alertDao, notifier, calendar)
+        val viewModel = WatchlistViewModel(fakeMarketData, alertDao, notifier, calendar, watchlistDao, prefs)
         val eur = AssetId("EURUSD", AssetClass.FOREX)
         fakeMarketData.state.value = mapOf(eur to Quote(eur, 1.1, 1.1, 0L, changePercent = -0.4))
 
         val item = viewModel.uiState.value.watchlistItems.first { it.symbol == "EURUSD" }
         assertEquals(1.1, item.currentPrice!!.toDouble(), 1e-9)
-        assertEquals(-0.4, item.changePercent, 1e-9)
-        assertFalse(item.isBullish)
+        assertEquals(-0.4, item.changePercent!!, 1e-9)
+        assertEquals(false, item.isBullish)
+    }
+
+    @Test
+    fun missingQuoteHasNoSyntheticGreenChangeAndItemsPersistThroughDao() = runTest {
+        val viewModel = WatchlistViewModel(fakeMarketData, alertDao, notifier, calendar, watchlistDao, prefs)
+        val initial = viewModel.uiState.value.watchlistItems.size
+
+        viewModel.addItem("ETHUSD")
+        assertTrue(watchlistDao.all().any { it.symbol == "ETHUSD" })
+        val missing = viewModel.uiState.value.watchlistItems.first { it.symbol == "ETHUSD" }
+        assertNull(missing.currentPrice)
+        assertNull(missing.changePercent)
+        assertNull(missing.isBullish)
+
+        viewModel.removeItem("ETHUSD")
+        assertFalse(watchlistDao.all().any { it.symbol == "ETHUSD" })
+        assertEquals(initial, viewModel.uiState.value.watchlistItems.size)
     }
 }

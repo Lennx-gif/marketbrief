@@ -11,6 +11,7 @@ import app.marketbrief.core.risk.RateNeeds
 import app.marketbrief.core.risk.PriceLevel
 import app.marketbrief.core.risk.RateSource
 import app.marketbrief.core.risk.Rejection
+import app.marketbrief.core.risk.RiskConverter
 import app.marketbrief.core.risk.RiskInput
 import app.marketbrief.core.risk.SizingOutcome
 import app.marketbrief.core.risk.SizingResult
@@ -21,6 +22,8 @@ import app.marketbrief.core.storage.db.PresetDao
 import app.marketbrief.core.storage.db.PresetEntity
 import app.marketbrief.core.storage.db.TradeLogDao
 import app.marketbrief.core.storage.db.TradeLogEntity
+import app.marketbrief.core.storage.db.JournalAccountEntity
+import app.marketbrief.core.storage.db.TradeSetupEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -70,6 +73,14 @@ class CalculatorViewModel @Inject constructor(
                     )
                 }
             }
+            val journalOptions = journalSetupWriter.options()
+            _uiState.update {
+                it.copy(
+                    journalAccounts = journalOptions.accounts,
+                    journalSetups = journalOptions.setups,
+                    selectedJournalAccountId = journalOptions.selectedAccountId
+                )
+            }
         }
     }
 
@@ -79,10 +90,38 @@ class CalculatorViewModel @Inject constructor(
         viewModelScope.launch { prefs.saveCalculatorDefaults(instrumentSymbol = instrument.symbol) }
     }
 
-    fun onBalanceChange(value: String) { _uiState.update { it.copy(balanceText = value) } }
+    fun onBalanceChange(value: String) {
+        if (value.startsWith("-")) return
+        _uiState.update { it.copy(balanceText = value) }
+        viewModelScope.launch { prefs.saveCalculatorDefaults(balanceText = value) }
+    }
+
     fun onAccountCurrencyChange(value: String) { _uiState.update { it.copy(accountCurrencyText = value.uppercase()) } }
-    fun onRiskTypeChange(isPercent: Boolean) { _uiState.update { it.copy(riskIsPercent = isPercent) } }
-    fun onRiskValueChange(value: String) { _uiState.update { it.copy(riskValueText = value) } }
+
+    fun onRiskTypeChange(isPercent: Boolean) {
+        if (_uiState.value.riskIsPercent == isPercent) return
+        val currentVal = parseBigDecimal(_uiState.value.riskValueText)
+        val balance = parseBigDecimal(_uiState.value.balanceText)
+        val newRiskText = if (currentVal != null && balance != null && balance > BigDecimal.ZERO) {
+            if (isPercent) {
+                RiskConverter.cashToPercent(balance, currentVal)?.toPlainString() ?: _uiState.value.riskValueText
+            } else {
+                RiskConverter.percentToCash(balance, currentVal)?.toPlainString() ?: _uiState.value.riskValueText
+            }
+        } else {
+            _uiState.value.riskValueText
+        }
+        _uiState.update { it.copy(riskIsPercent = isPercent, riskValueText = newRiskText) }
+        viewModelScope.launch {
+            prefs.saveCalculatorDefaults(riskIsPercent = isPercent, riskValueText = newRiskText)
+        }
+    }
+
+    fun onRiskValueChange(value: String) {
+        if (value.startsWith("-")) return
+        _uiState.update { it.copy(riskValueText = value) }
+        viewModelScope.launch { prefs.saveCalculatorDefaults(riskValueText = value) }
+    }
     fun onDirectionChange(direction: Direction) { _uiState.update { it.copy(direction = direction) } }
     fun onEntryChange(value: String) { _uiState.update { it.copy(entryText = value) } }
     fun onStopChange(value: String) { _uiState.update { it.copy(stopText = value) } }
@@ -101,20 +140,104 @@ class CalculatorViewModel @Inject constructor(
         }
     }
 
-    fun saveSetup(saveAnyway: Boolean = false) {
-        val state = _uiState.value
-        val result = state.result ?: return
-        if (state.guardrailWarnings.isNotEmpty() && !saveAnyway) {
-            _uiState.update { it.copy(setupMessage = "BLOCK: ${state.guardrailWarnings.joinToString()}. Choose Save anyway to override.") }
-            return
-        }
-        viewModelScope.launch {
-            journalSetupWriter.save(toPlannedSetup(state, result))
-            _uiState.update { it.copy(setupMessage = "Setup saved to journal.") }
+    fun selectJournalAccount(accountId: Long?) {
+        _uiState.update { it.copy(selectedJournalAccountId = accountId) }
+        accountId?.let { id ->
+            viewModelScope.launch { prefs.setSelectedJournalAccountId(id) }
         }
     }
 
-    private fun toPlannedSetup(state: CalculatorUiState, result: SizingResult) = PlannedSetup(
+    fun selectJournalSetup(setupId: String?) {
+        _uiState.update { it.copy(selectedJournalSetupId = setupId, selectedChecklistItems = emptySet()) }
+    }
+
+    fun toggleChecklistItem(item: String, checked: Boolean) {
+        _uiState.update {
+            it.copy(selectedChecklistItems = if (checked) it.selectedChecklistItems + item else it.selectedChecklistItems - item)
+        }
+    }
+
+    fun showSaveSetupDialog() {
+        _uiState.update { it.copy(showSaveJournalDialog = true) }
+        viewModelScope.launch {
+            val options = journalSetupWriter.options()
+            val current = _uiState.value
+            val setupId = current.selectedJournalSetupId
+                ?.takeIf { id -> options.setups.any { it.id == id } }
+            _uiState.update {
+                it.copy(
+                    journalAccounts = options.accounts,
+                    journalSetups = options.setups,
+                    selectedJournalAccountId = options.selectedAccountId,
+                    selectedJournalSetupId = setupId,
+                    selectedChecklistItems = if (setupId == current.selectedJournalSetupId) {
+                        current.selectedChecklistItems
+                    } else {
+                        emptySet()
+                    }
+                )
+            }
+        }
+    }
+
+    fun dismissSaveSetupDialog() {
+        _uiState.update { it.copy(showSaveJournalDialog = false) }
+    }
+
+    fun saveSetup(saveAnyway: Boolean = false) {
+        val state = _uiState.value
+        val result = state.result ?: return
+        viewModelScope.launch {
+            val selectedAccount = state.journalAccounts.firstOrNull { it.id == state.selectedJournalAccountId }
+            if (selectedAccount == null) {
+                _uiState.update { it.copy(setupMessage = "Choose an active journal account before saving this trade.") }
+                return@launch
+            }
+            if (selectedAccount.currency.uppercase() != state.accountCurrencyText.uppercase()) {
+                _uiState.update {
+                    it.copy(
+                        setupMessage = "Calculator currency is ${state.accountCurrencyText.uppercase()}, but ${selectedAccount.name} uses ${selectedAccount.currency}. Update the calculator currency and recalculate before saving."
+                    )
+                }
+                return@launch
+            }
+            val selectedChecklist = state.journalSetups
+                .firstOrNull { it.id == state.selectedJournalSetupId }
+                ?.checklist
+                ?.lines()
+                ?.filter { it.isNotBlank() }
+                .orEmpty()
+            val checklistResult = if (selectedChecklist.isEmpty()) {
+                ""
+            } else {
+                "${selectedChecklist.mapIndexed { index, item -> "$index:$item" }.count { it in state.selectedChecklistItems }}/${selectedChecklist.size}"
+            }
+            val planned = toPlannedSetup(state, result, checklistResult = checklistResult)
+            val warnings = journalSetupWriter.evaluate(planned).map { it.message }
+            if (warnings.isNotEmpty() && !saveAnyway) {
+                _uiState.update {
+                    it.copy(
+                        guardrailWarnings = warnings,
+                        setupMessage = "BLOCK: ${warnings.joinToString()}. Choose Save anyway to override."
+                    )
+                }
+                return@launch
+            }
+            journalSetupWriter.save(planned)
+            planned.accountId?.let { prefs.setSelectedJournalAccountId(it) }
+            _uiState.update {
+                it.copy(showSaveJournalDialog = false, setupMessage = "Setup saved to journal.")
+            }
+        }
+    }
+
+    private fun toPlannedSetup(
+        state: CalculatorUiState,
+        result: SizingResult,
+        accountId: Long? = state.selectedJournalAccountId,
+        setupId: String? = state.selectedJournalSetupId,
+        checklistResult: String = ""
+    ) = PlannedSetup(
         symbol = state.selectedInstrument.symbol,
         assetClass = state.selectedInstrument.assetClass.name,
         direction = state.direction.name,
@@ -125,7 +248,10 @@ class CalculatorViewModel @Inject constructor(
         lots = result.lots.toPlainString(),
         riskAmount = result.actualRisk.toPlainString(),
         riskPercent = result.actualRiskPercent.toPlainString(),
-        accountCurrency = state.accountCurrencyText
+        accountCurrency = state.accountCurrencyText,
+        accountId = accountId,
+        setupId = setupId,
+        checklistResult = checklistResult
     )
 
     fun calculate() {
@@ -370,6 +496,12 @@ data class CalculatorUiState(
     val rateOverrideText: String = "",
     val guardrailWarnings: List<String> = emptyList(),
     val setupMessage: String? = null,
+    val journalAccounts: List<JournalAccountEntity> = emptyList(),
+    val journalSetups: List<TradeSetupEntity> = emptyList(),
+    val selectedJournalAccountId: Long? = null,
+    val selectedJournalSetupId: String? = null,
+    val selectedChecklistItems: Set<String> = emptySet(),
+    val showSaveJournalDialog: Boolean = false,
     val rateIsStale: Boolean = false,
     val isCalculating: Boolean = false,
     val result: SizingResult? = null,

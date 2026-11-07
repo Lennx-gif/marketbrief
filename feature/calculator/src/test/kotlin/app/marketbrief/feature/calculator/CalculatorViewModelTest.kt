@@ -7,10 +7,13 @@ import app.marketbrief.core.storage.CalculatorDefaults
 import app.marketbrief.core.storage.UserPrefsRepository
 import app.marketbrief.core.storage.JournalSetupWriter
 import app.marketbrief.core.storage.PlannedSetup
+import app.marketbrief.core.storage.JournalSetupOptions
 import app.marketbrief.core.storage.db.PresetDao
 import app.marketbrief.core.storage.db.PresetEntity
 import app.marketbrief.core.storage.db.TradeLogDao
 import app.marketbrief.core.storage.db.TradeLogEntity
+import app.marketbrief.core.storage.db.JournalAccountEntity
+import app.marketbrief.core.storage.db.TradeSetupEntity
 import app.marketbrief.feature.calculator.ui.CalculatorViewModel
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -164,6 +167,48 @@ class CalculatorViewModelTest {
     }
 
     @Test
+    fun savingPlannedTradePersistsSelectedAccountSetupAndChecklistScore() = runTest {
+        val account = JournalAccountEntity(
+            id = 7,
+            name = "Demo",
+            type = "DEMO",
+            currency = "USD",
+            startingBalance = "10000",
+            maxRiskPerTradePercent = "1",
+            dailyLossLimitPercent = "3",
+            maxOpenRiskPercent = "5",
+            maxDrawdownPercent = "10",
+            drawdownMode = "STATIC",
+            resetTimezone = "UTC",
+            createdAt = 1L
+        )
+        val setup = TradeSetupEntity(
+            id = "breakout",
+            name = "Breakout",
+            description = "",
+            tags = "",
+            checklist = "Trend confirmed\nBreakout retested",
+            color = "TEAL",
+            createdAt = 1L
+        )
+        journalSetupWriter.optionsValue = JournalSetupOptions(listOf(account), listOf(setup), account.id)
+        val viewModel = viewModel()
+        viewModel.onStopTypeChange(true)
+        viewModel.onStopChange("50")
+        viewModel.onEntryChange("1.0850")
+        viewModel.calculate()
+        viewModel.selectJournalAccount(account.id)
+        viewModel.selectJournalSetup(setup.id)
+        viewModel.toggleChecklistItem("0:Trend confirmed", true)
+        viewModel.saveSetup()
+
+        val saved = journalSetupWriter.saved.single()
+        assertEquals(account.id, saved.accountId)
+        assertEquals(setup.id, saved.setupId)
+        assertEquals("1/2", saved.checklistResult)
+    }
+
+    @Test
     fun testFailedCalculateDoesNotLogTrade() = runTest {
         val viewModel = viewModel()
         viewModel.onBalanceChange("not_a_number")
@@ -262,6 +307,36 @@ class CalculatorViewModelTest {
         viewModel.calculate()
         assertTrue(rateRepository.refreshCount >= 1)
     }
+
+    @Test
+    fun testSwitchingRiskModeKeepsEconomicValueConstant() = runTest {
+        val viewModel = viewModel()
+        viewModel.onBalanceChange("10000")
+        viewModel.onRiskTypeChange(true)
+        viewModel.onRiskValueChange("1")
+
+        // Switch to Cash mode
+        viewModel.onRiskTypeChange(false)
+        assertEquals(false, viewModel.uiState.value.riskIsPercent)
+        assertEquals("100.00", viewModel.uiState.value.riskValueText)
+
+        // Switch back to Percent mode
+        viewModel.onRiskTypeChange(true)
+        assertEquals(true, viewModel.uiState.value.riskIsPercent)
+        assertEquals("1.00", viewModel.uiState.value.riskValueText)
+    }
+
+    @Test
+    fun testNegativeBalanceAndRiskRejected() = runTest {
+        val viewModel = viewModel()
+        viewModel.onBalanceChange("10000")
+        viewModel.onBalanceChange("-5000")
+        assertEquals("10000", viewModel.uiState.value.balanceText)
+
+        viewModel.onRiskValueChange("2")
+        viewModel.onRiskValueChange("-3")
+        assertEquals("2", viewModel.uiState.value.riskValueText)
+    }
 }
 
 private const val TEST_AS_OF = 1_700_000_000_000L
@@ -284,6 +359,8 @@ private class FakeRateRepository : RateRepository {
 
 private class FakeJournalSetupWriter : JournalSetupWriter {
     val saved = mutableListOf<PlannedSetup>()
+    var optionsValue = JournalSetupOptions(emptyList(), emptyList(), null)
+    override suspend fun options() = optionsValue
     override suspend fun save(setup: PlannedSetup): String { saved += setup; return "entry-${saved.size}" }
 }
 

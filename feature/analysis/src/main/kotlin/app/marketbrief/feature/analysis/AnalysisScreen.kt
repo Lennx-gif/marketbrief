@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -22,20 +23,12 @@ import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,6 +52,7 @@ import app.marketbrief.core.ui.components.AppleGroupedSection
 import app.marketbrief.core.ui.components.AppleHairlineDivider
 import app.marketbrief.core.ui.components.ApplePillChip
 import app.marketbrief.core.ui.components.AppleSegmentedControl
+import app.marketbrief.core.ui.components.FilterChipRow
 import app.marketbrief.core.ui.theme.MarketBriefTheme
 import app.marketbrief.feature.analysis.ui.AnalysisMode
 import app.marketbrief.feature.analysis.ui.AnalysisViewModel
@@ -119,7 +113,8 @@ fun AnalysisScreenContent(
                     selectedItem = uiState.mode,
                     onItemSelected = onModeSelected,
                     labelProvider = { if (it == AnalysisMode.SENTIMENT) "Feed Sentiment" else "Technicals" },
-                    modifier = Modifier.width(260.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    equalWeights = true
                 )
             }
 
@@ -150,17 +145,14 @@ fun SentimentSection(
     ) {
         // Time window pills
         item {
-            Row(
+            AppleSegmentedControl(
+                items = listOf(SentimentTimeWindow.H24, SentimentTimeWindow.D7, SentimentTimeWindow.D30),
+                selectedItem = uiState.timeWindow,
+                onItemSelected = onTimeWindowSelected,
+                labelProvider = { it.label },
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                AppleSegmentedControl(
-                    items = listOf(SentimentTimeWindow.H24, SentimentTimeWindow.D7, SentimentTimeWindow.D30),
-                    selectedItem = uiState.timeWindow,
-                    onItemSelected = onTimeWindowSelected,
-                    labelProvider = { it.label }
-                )
-            }
+                equalWeights = true
+            )
         }
 
         // Major Assets / Pairs Sentiment Cards
@@ -443,46 +435,19 @@ fun AssetSelector(
     onAssetSelected: (String) -> Unit,
     assets: List<String>
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        TextField(
-            value = selectedAsset,
-            onValueChange = {},
-            label = { Text("Instrument") },
-            trailingIcon = {
-                Icon(
-                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = null
-                )
-            },
-            readOnly = true,
-            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
-            shape = RoundedCornerShape(12.dp),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MarketBriefTheme.colors.cardSurface,
-                unfocusedContainerColor = MarketBriefTheme.colors.cardSurface
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "INSTRUMENT",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            assets.forEach { asset ->
-                DropdownMenuItem(
-                    text = { Text(asset) },
-                    onClick = {
-                        onAssetSelected(asset)
-                        expanded = false
-                    }
-                )
-            }
-        }
+        FilterChipRow(
+            items = assets,
+            selectedItem = selectedAsset,
+            onItemSelected = onAssetSelected,
+            contentPadding = PaddingValues(horizontal = 0.dp)
+        )
     }
 }
 
@@ -492,19 +457,12 @@ fun TimeframeSelector(
     onTimeframeSelected: (String) -> Unit
 ) {
     val timeframes = listOf("M1", "M5", "M15", "H1", "H4", "D1", "W1")
-
-    LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(timeframes) { tf ->
-            ApplePillChip(
-                text = tf,
-                isSelected = tf == selectedTimeframe,
-                onClick = { onTimeframeSelected(tf) }
-            )
-        }
-    }
+    FilterChipRow(
+        items = timeframes,
+        selectedItem = selectedTimeframe,
+        onItemSelected = onTimeframeSelected,
+        contentPadding = PaddingValues(horizontal = 0.dp)
+    )
 }
 
 @Composable

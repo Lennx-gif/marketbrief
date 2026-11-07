@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.marketbrief.core.model.Article
+import app.marketbrief.core.model.Quote
 import app.marketbrief.core.ui.components.AppleHairlineDivider
 import app.marketbrief.core.ui.theme.MarketBriefTheme
 import coil.compose.AsyncImage
@@ -51,6 +52,7 @@ fun ArticleCard(
     onDownload: () -> Unit,
     onSizeTrade: (String) -> Unit,
     onShare: () -> Unit,
+    relatedQuote: Quote? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -149,6 +151,10 @@ fun ArticleCard(
             )
         }
 
+        relatedQuote?.let { quote ->
+            RelatedSymbolChip(symbol = quote.assetId.symbol, quote = quote)
+        }
+
         // Source row with actions
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -217,6 +223,41 @@ fun ArticleCard(
         }
 
         AppleHairlineDivider(modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+@Composable
+private fun RelatedSymbolChip(symbol: String, quote: Quote, modifier: Modifier = Modifier) {
+    val change = quote.changePercent
+    val isUp = change != null && change >= 0.0
+    val stale = System.currentTimeMillis() - quote.timestamp > 5 * 60_000L
+    val changeColor = when {
+        change == null || stale -> MaterialTheme.colorScheme.onSurfaceVariant
+        isUp -> MarketBriefTheme.colors.bullish
+        else -> MarketBriefTheme.colors.bearish
+    }
+    val price = java.math.BigDecimal.valueOf(quote.mid).stripTrailingZeros().toPlainString()
+    val changeText = change?.let {
+        val arrow = if (isUp) "↑" else "↓"
+        "$arrow ${String.format(java.util.Locale.US, "%.2f", kotlin.math.abs(it))}%"
+    }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(100.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(symbol, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text(price, fontSize = 11.sp, color = if (stale) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+            if (changeText != null) {
+                Text(changeText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = changeColor)
+            }
+            if (stale) Text("stale", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 

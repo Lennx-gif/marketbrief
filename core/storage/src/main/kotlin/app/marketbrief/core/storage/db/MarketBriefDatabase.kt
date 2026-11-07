@@ -20,9 +20,14 @@ import androidx.room.RoomDatabase
         SourcePrefEntity::class,
         ArticleFtsEntity::class,
         ArticleBodyFtsEntity::class,
-        RateCacheEntity::class
+        RateCacheEntity::class,
+        WatchlistItemEntity::class,
+        JournalAccountEntity::class,
+        TradeSetupEntity::class,
+        DailyEntryEntity::class,
+        JournalAttachmentEntity::class
     ],
-    version = 5,
+    version = 7,
     exportSchema = true
 )
 abstract class MarketBriefDatabase : RoomDatabase() {
@@ -39,4 +44,9 @@ abstract class MarketBriefDatabase : RoomDatabase() {
     abstract fun sourcePrefDao(): SourcePrefDao
     abstract fun articleTagDao(): ArticleTagDao
     abstract fun rateCacheDao(): RateCacheDao
+    abstract fun watchlistDao(): WatchlistDao
+    abstract fun journalAccountDao(): JournalAccountDao
+    abstract fun tradeSetupDao(): TradeSetupDao
+    abstract fun dailyEntryDao(): DailyEntryDao
+    abstract fun journalAttachmentDao(): JournalAttachmentDao
 }

@@ -320,6 +320,8 @@ fun <T> FilterChipRow(
     selectedItem: T?,
     onItemSelected: (T) -> Unit,
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp),
+    selectedItems: Set<T>? = null,
     labelProvider: (T) -> String = { it.toString() },
     leadingIconProvider: ((T) -> ImageVector?)? = null,
     trailingAction: (@Composable () -> Unit)? = null
@@ -327,11 +329,11 @@ fun <T> FilterChipRow(
     LazyRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp),
+        contentPadding = contentPadding,
         verticalAlignment = Alignment.CenterVertically
     ) {
         items(items) { item ->
-            val isSelected = item == selectedItem
+            val isSelected = selectedItems?.contains(item) ?: (item == selectedItem)
             ApplePillChip(
                 text = labelProvider(item),
                 isSelected = isSelected,

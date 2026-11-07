@@ -1,6 +1,10 @@
 package app.marketbrief.feature.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
 import android.Manifest
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,12 +18,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Public
@@ -52,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,17 +68,28 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.marketbrief.core.ui.components.AppleGroupedSection
 import app.marketbrief.core.ui.components.AppleHairlineDivider
 import app.marketbrief.core.ui.components.ApplePillChip
-import app.marketbrief.core.ui.components.AppleSegmentedControl
+import app.marketbrief.core.ui.components.LabeledSegmentedRow
+import app.marketbrief.core.ui.components.SettingRow
 import app.marketbrief.core.ui.theme.MarketBriefTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    versionName: String,
+    versionCode: Int,
+    flavorName: String,
+    twelveDataKeyConfigured: Boolean,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val clipboard = remember(context) { context.getSystemService(ClipboardManager::class.java) }
     var showMyfxbookDialog by remember { mutableStateOf(false) }
+    var showLicenseDialog by rememberSaveable { mutableStateOf(false) }
+    var diagnosticsExpanded by rememberSaveable { mutableStateOf(false) }
+    var debugInfoCopied by rememberSaveable { mutableStateOf(false) }
+    var repositoryLinkUnavailable by rememberSaveable { mutableStateOf(false) }
     var digestTimeDraft by rememberSaveable(uiState.digestTime) { mutableStateOf(uiState.digestTime) }
     var quietHoursDraft by rememberSaveable(uiState.quietHours) { mutableStateOf(uiState.quietHours) }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -169,6 +188,7 @@ fun SettingsScreen(
                             Switch(checked = uiState.kenyaTradeLens, onCheckedChange = viewModel::setKenyaTradeLens)
                         }
                     }
+
                 }
             }
 
@@ -181,6 +201,29 @@ fun SettingsScreen(
                             items(listOf("USD", "EUR", "GBP", "KES", "JPY", "CAD", "AUD", "CHF")) { currency ->
                                 ApplePillChip(currency, currency == uiState.accountCurrency, onClick = { viewModel.setAccountCurrency(currency) })
                             }
+                        }
+
+                        if (showLicenseDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showLicenseDialog = false },
+                                title = { Text("Open-source licenses") },
+                                text = {
+                                    Column(
+                                        modifier = Modifier
+                                            .heightIn(max = 420.dp)
+                                            .verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        openSourceLicenseEntries.forEach { entry ->
+                                            AboutBody(entry)
+                                        }
+                                        AboutBody("This list covers the principal direct application libraries. Transitive dependency notices are provided by their respective projects.")
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = { showLicenseDialog = false }) { Text("Close") }
+                                }
+                            )
                         }
                     }
                 }
@@ -301,32 +344,15 @@ fun SettingsScreen(
             item {
                 SettingsSectionHeader(title = "ANALYSIS VIEW")
                 AppleGroupedSection {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "Display Mode",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Choose whether to display sentiment gauges exclusively or combine with headline volume statistics in the analysis tab.",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        AppleSegmentedControl(
-                            items = listOf("SENTIMENT", "BOTH"),
-                            selectedItem = uiState.analysisView,
-                            onItemSelected = { viewModel.setAnalysisView(it) },
-                            labelProvider = { if (it == "SENTIMENT") "Sentiment Only" else "Sentiment & Volume" },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
+                    LabeledSegmentedRow(
+                        label = "Display Mode",
+                        options = listOf("SENTIMENT", "BOTH"),
+                        selected = uiState.analysisView,
+                        onSelect = viewModel::setAnalysisView,
+                        supportingText = "Choose whether analysis includes headline volume statistics.",
+                        modifier = Modifier.padding(16.dp),
+                        labelProvider = { if (it == "SENTIMENT") "Sentiment Only" else "Sentiment & Volume" }
+                    )
                 }
             }
 
@@ -392,7 +418,7 @@ fun SettingsScreen(
                                     color = MaterialTheme.colorScheme.error
                                 )
                                 Text(
-                                    text = "${uiState.cachedArticleCount} articles cached in Room",
+                                    text = "${uiState.cachedArticleCount} articles saved on this device",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -450,58 +476,136 @@ fun SettingsScreen(
             item {
                 SettingsSectionHeader(title = "APPEARANCE")
                 AppleGroupedSection {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Theme",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        AppleSegmentedControl(
-                            items = listOf("SYSTEM", "LIGHT", "DARK"),
-                            selectedItem = uiState.themeMode,
-                            onItemSelected = { viewModel.setThemeMode(it) },
-                            labelProvider = {
-                                when (it) {
-                                    "SYSTEM" -> "System"
-                                    "LIGHT" -> "Light"
-                                    else -> "Dark"
-                                }
+                    LabeledSegmentedRow(
+                        label = "Theme",
+                        options = listOf("SYSTEM", "LIGHT", "DARK"),
+                        selected = uiState.themeMode,
+                        onSelect = viewModel::setThemeMode,
+                        modifier = Modifier.padding(16.dp),
+                        forceStacked = true,
+                        labelProvider = {
+                            when (it) {
+                                "SYSTEM" -> "System"
+                                "LIGHT" -> "Light"
+                                else -> "Dark"
                             }
-                        )
-                    }
+                        }
+                    )
                 }
             }
 
-            // Section 6: About & Disclaimers
+            item {
+                SettingsSectionHeader(title = "FEED & READER")
+                AppleGroupedSection {
+                    SettingRow(
+                        title = "Show market ticker on Feed",
+                        subtitle = "Use cached quotes only; no quote request is started from a news card.",
+                        trailingContent = {
+                            Switch(
+                                checked = uiState.showMarketTickerOnFeed,
+                                onCheckedChange = viewModel::setShowMarketTickerOnFeed
+                            )
+                        }
+                    )
+                    AppleHairlineDivider()
+                    SettingRow(
+                        title = "Always use in-app page when full text fails",
+                        subtitle = "Publisher pages may still contain ads or fail to load.",
+                        trailingContent = {
+                            Switch(
+                                checked = uiState.inAppArticleFallback,
+                                onCheckedChange = viewModel::setInAppArticleFallback
+                            )
+                        }
+                    )
+                }
+            }
+
             item {
                 SettingsSectionHeader(title = "ABOUT")
                 AppleGroupedSection {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         Text(
-                            text = "MarketPulse MarketBrief",
-                            fontSize = 16.sp,
+                            text = "MarketBrief",
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Version 1.0.0 (Apple Minimalist Edition)",
+                            text = DebugInfoBuilder.formatVersion(versionName, versionCode, flavorName),
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text(
-                            text = "Market news data powered by NewsAPI.org. Technical sentiment indicators are heuristic natural-language estimations and do not constitute financial advice.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            lineHeight = 16.sp
+
+                        AboutHeading("What it is")
+                        AboutBody("A financial news reader with in-app reading and market tools—sentiment, position sizing, and a watchlist—for forex-first traders.")
+
+                        AboutHeading("Data sources and attribution")
+                        AboutBody("NewsAPI.org supplies headlines and links. Publisher and author credits stay attached to each story; NewsAPI's Developer plan is limited to development and testing, and production use requires an eligible subscription.")
+                        AboutBody("Twelve Data supplies market quotes. Quotes may be delayed and are not tick data. External display, redistribution, commercial use, and exchange data may require additional rights under your subscription.")
+                        AboutBody("Myfxbook community positioning is shown only when connected. It describes other traders' positions and is not a forecast.")
+
+                        AboutHeading("Disclaimers")
+                        AboutBody("MarketBrief is not financial advice. Sentiment is a keyword heuristic. Crowd positioning describes other traders, not a prediction. In-app reading blocks a small CC0-1.0 host list and hides selected ad containers; ads can remain, publisher pages may break, and blocking may affect publishers.")
+
+                        AboutHeading("Privacy")
+                        AboutBody("There is no MarketBrief account. Saved stories, journal entries, and watchlist choices stay on this device. Requests to NewsAPI.org, Twelve Data, and Myfxbook send the data needed for those services; publisher hosts also receive requests for article pages and images. Myfxbook credentials are encrypted on this device and are sent to Myfxbook to authenticate.")
+
+                        TextButton(onClick = { showLicenseDialog = true }) { Text("Open-source licenses") }
+                        TextButton(onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Lennx-gif/marketbrief"))
+                            if (intent.resolveActivity(context.packageManager) != null) {
+                                context.startActivity(intent)
+                                repositoryLinkUnavailable = false
+                            } else {
+                                repositoryLinkUnavailable = true
+                            }
+                        }) { Text("Project repository") }
+                        if (repositoryLinkUnavailable) {
+                            AboutBody("No browser is available to open the project repository.")
+                        }
+
+                        AppleHairlineDivider()
+                        SettingRow(
+                            title = "Diagnostics",
+                            subtitle = "Provider budgets and last refresh; excludes credentials and article text.",
+                            onClick = { diagnosticsExpanded = !diagnosticsExpanded },
+                            trailingContent = { Text(if (diagnosticsExpanded) "Hide" else "Show", color = MaterialTheme.colorScheme.primary) }
                         )
+                        if (diagnosticsExpanded) {
+                            AboutBody("NewsAPI: ${(100 - uiState.budgetUsed).coerceAtLeast(0)} / 100 requests remaining")
+                            AboutBody("Twelve Data: ${uiState.twelveDataRemaining} / 800 credits remaining · key ${if (twelveDataKeyConfigured) "configured" else "missing"}")
+                            AboutBody("Myfxbook: ${uiState.myfxbookRemaining} / 100 requests remaining")
+                            AboutBody("Last market refresh: ${formatRefreshTime(uiState.lastMarketRefreshEpochMillis)}")
+                            Button(onClick = {
+                                val text = DebugInfoBuilder.build(
+                                    DebugInfoInput(
+                                        versionName = versionName,
+                                        versionCode = versionCode,
+                                        flavor = flavorName,
+                                        newsRequestsRemaining = (100 - uiState.budgetUsed).coerceAtLeast(0),
+                                        twelveDataCreditsRemaining = uiState.twelveDataRemaining,
+                                        myfxbookRequestsRemaining = uiState.myfxbookRemaining,
+                                        lastMarketRefreshEpochMillis = uiState.lastMarketRefreshEpochMillis,
+                                        cachedArticleCount = uiState.cachedArticleCount,
+                                        twelveDataKeyConfigured = twelveDataKeyConfigured,
+                                        myfxbookConnected = uiState.myfxbookConnected
+                                    )
+                                )
+                                if (clipboard == null) {
+                                    debugInfoCopied = false
+                                } else {
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("MarketBrief debug info", text))
+                                    debugInfoCopied = true
+                                }
+                            }) { Text(if (debugInfoCopied) "Debug info copied" else "Copy debug info") }
+                            if (clipboard == null) {
+                                AboutBody("Clipboard is unavailable on this device.")
+                            }
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(30.dp))
@@ -522,6 +626,44 @@ fun SettingsSectionHeader(title: String) {
     )
 }
 
+@Composable
+private fun AboutHeading(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(top = 12.dp)
+    )
+}
+
+@Composable
+private fun AboutBody(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+private val openSourceLicenseEntries = listOf(
+    "AndroidX, Jetpack Compose, Room, WorkManager, and DataStore — Apache License 2.0",
+    "Kotlin and kotlinx libraries — Apache License 2.0",
+    "Dagger Hilt — Apache License 2.0",
+    "Ktor — Apache License 2.0",
+    "OkHttp and Okio — Apache License 2.0",
+    "Coil — Apache License 2.0",
+    "Jsoup — MIT License",
+    "JUnit — Eclipse Public License 1.0",
+    "MockK and Turbine — Apache License 2.0"
+)
+
+private fun formatRefreshTime(epochMillis: Long): String =
+    if (epochMillis <= 0L) {
+        "Not available"
+    } else {
+        java.text.DateFormat.getDateTimeInstance().format(java.util.Date(epochMillis))
+    }
 
 @Composable
 private fun MyfxbookLoginDialog(onDismiss: () -> Unit, onConnect: (String, String) -> Unit) {

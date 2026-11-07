@@ -5,10 +5,10 @@
 | Q0.1 | 2026-11-06 | Screenshot availability and observations | Reference screenshots provided in `Page Layout` | Device screenshots and mockups verified (2026-11-06) | Resolved |
 | Q0.2 | 2026-11-06 | Journal and Calendar CSV import presence | Existing at branch head `f9cefde` | Verified on branch head (2026-11-06) | Resolved |
 | Q0.3 | 2026-11-06 | Canonical branch workflow & PR target | Work on current feature branch, clean commits ready for PR into main | Approved default (2026-11-06) | Resolved |
-| Q9.1 | 2026-11-06 | Missing prices display "-" and "+0.0%" when key missing or quote unavailable | Show "Add a Twelve Data key to see prices" or "No price yet" instead of dashes / green zero | Approved default (2026-11-06) | Resolved |
-| Q9.2 | 2026-11-06 | Analysis screen shows 0.00 Neutral, 0 headlines | Investigate tagging & time window query in `BACKLOG.md`; do not block R2 layout | Approved default (2026-11-06) | Resolved |
-| Q9.3 | 2026-11-06 | Feed header subtitle copy ("Global Financial Intelligence") | Keep until interests customization lands | Approved default (2026-11-06) | Resolved |
-| Q9.4 | 2026-11-06 | Duplicate calculator headings ("Position Calculator" & "Position Sizer") | Keep single heading "Position Sizer"; make Journal a pill-shaped button in top bar matching app aesthetics | Approved with user note: pill-shaped Journal button (2026-11-06) | Resolved |
+| Q9.1 | 2026-11-06 | Missing prices display "-" and "+0.0%" when key missing or quote unavailable | Show "Add a Twelve Data key to see prices" or "No price yet" instead of dashes / green zero | Key configured in screenshot build (2026-11-06); retain explicit unavailable state for absent quotes | Resolved |
+| Q9.2 | 2026-11-06 | Analysis screen shows 0.00 Neutral, 0 headlines | Investigate tagging & time window query in `BACKLOG.md`; do not block R2 layout | Feed was loaded (2026-11-06); investigate tagging/time-window separately | Resolved |
+| Q9.3 | 2026-11-06 | Feed header subtitle copy ("Global Financial Intelligence") | Keep until interests customization lands | Change to "Financial News Page" (2026-11-06) | Resolved |
+| Q9.4 | 2026-11-06 | Duplicate calculator headings ("Position Calculator" & "Position Sizer") | Keep single heading "Position Sizer"; make Journal a pill-shaped button in top bar matching app aesthetics | Keep both headings (2026-11-06); retain pill-shaped Journal button | Resolved |
 | Q1.1 | 2026-11-06 | Keep region (country) filter or categories only? | Keep behind filter icon and bottom sheet; show active region as subtitle | Approved default (2026-11-06) | Resolved |
 | Q1.2 | 2026-11-06 | Keep source avatar strip? | Off by default, scrollable with content, setting to enable | Approved default (2026-11-06) | Resolved |
 | Q1.3 | 2026-11-06 | Where does "Saved" category live? | First chip in CategoryFilterBar | Approved default (2026-11-06) | Resolved |

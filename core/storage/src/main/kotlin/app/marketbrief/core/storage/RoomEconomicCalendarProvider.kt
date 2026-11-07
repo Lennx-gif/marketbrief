@@ -1,11 +1,9 @@
 package app.marketbrief.core.storage
 
-import app.marketbrief.core.data.CalendarCsvParser
 import app.marketbrief.core.data.CalendarEvent
 import app.marketbrief.core.data.EconomicCalendarProvider
 import app.marketbrief.core.storage.db.CalendarDao
 import app.marketbrief.core.storage.db.CalendarEventEntity
-import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -16,10 +14,5 @@ class RoomEconomicCalendarProvider @Inject constructor(private val dao: Calendar
     }
     override suspend fun add(event: CalendarEvent) {
         dao.upsert(listOf(CalendarEventEntity(event.id, event.title, event.currency, event.instantEpochMillis, event.impact, event.source)))
-    }
-    override suspend fun importCsv(csv: String): Int {
-        val items = CalendarCsvParser.parse(csv)
-        dao.upsert(items.map { CalendarEventEntity(UUID.randomUUID().toString(), it.title, it.currency, it.instantEpochMillis, it.impact, "IMPORTED") })
-        return items.size
     }
 }

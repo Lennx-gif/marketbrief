@@ -6,10 +6,12 @@ import app.marketbrief.core.entitlements.Plan
 import app.marketbrief.core.entitlements.PlanSource
 import app.marketbrief.core.model.Article
 import app.marketbrief.core.model.Category
+import app.marketbrief.core.model.CountryFilter
 import app.marketbrief.core.storage.UserPrefsRepository
 import app.marketbrief.feature.news.ui.FeedAction
 import app.marketbrief.feature.news.ui.NewsViewModel
 import io.mockk.every
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -50,6 +52,10 @@ class NewsViewModelTest {
         val prefs = mockk<UserPrefsRepository>(relaxed = true)
         every { prefs.homeCountry } returns flowOf("Kenya")
         every { prefs.dailyBudgetUsed } returns flowOf(0)
+        every { prefs.feedCategories } returns flowOf(setOf(Category.All))
+        every { prefs.feedCountry } returns flowOf(CountryFilter.Global)
+        every { prefs.showSourceStrip } returns flowOf(false)
+        every { prefs.showMarketTickerOnFeed } returns flowOf(false)
 
         val planSource = object : PlanSource {
             override val plan: Plan = Plan.PERSONAL
@@ -75,6 +81,10 @@ class NewsViewModelTest {
         val prefs = mockk<UserPrefsRepository>(relaxed = true)
         every { prefs.homeCountry } returns flowOf("Kenya")
         every { prefs.dailyBudgetUsed } returns flowOf(0)
+        every { prefs.feedCategories } returns flowOf(setOf(Category.All))
+        every { prefs.feedCountry } returns flowOf(CountryFilter.Global)
+        every { prefs.showSourceStrip } returns flowOf(false)
+        every { prefs.showMarketTickerOnFeed } returns flowOf(false)
 
         val planSource = object : PlanSource {
             override val plan: Plan = Plan.PERSONAL
@@ -91,5 +101,34 @@ class NewsViewModelTest {
 
         val state = viewModel.uiState.value
         assertTrue("Trade category should be selected", Category.Trade in state.selectedCategories)
+        coVerify { prefs.setFeedCategories(match { Category.Trade in it }) }
+    }
+
+    @Test
+    fun feedSearchFiltersLocallyAndCanBeCleared() = runTest {
+        val repository = InMemoryNewsRepository(InMemoryNewsRepository.defaultArticles())
+        val prefs = mockk<UserPrefsRepository>(relaxed = true)
+        every { prefs.homeCountry } returns flowOf("Kenya")
+        every { prefs.dailyBudgetUsed } returns flowOf(0)
+        every { prefs.feedCategories } returns flowOf(setOf(Category.All))
+        every { prefs.feedCountry } returns flowOf(CountryFilter.Global)
+        every { prefs.showSourceStrip } returns flowOf(false)
+        every { prefs.showMarketTickerOnFeed } returns flowOf(false)
+
+        val planSource = object : PlanSource {
+            override val plan: Plan = Plan.PERSONAL
+        }
+        val marketData = mockk<MarketDataRepository>(relaxed = true)
+        every { marketData.quotes } returns flowOf(emptyMap())
+        val viewModel = NewsViewModel(repository, prefs, marketData, planSource)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+
+        viewModel.onFeedSearchChanged("no article matches this query")
+        assertTrue(viewModel.uiState.value.articles.isEmpty())
+
+        viewModel.onFeedSearchChanged("")
+        assertTrue(viewModel.uiState.value.articles.isNotEmpty())
     }
 }

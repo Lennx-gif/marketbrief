@@ -33,3 +33,91 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
         db.execSQL("CREATE TABLE IF NOT EXISTS rate_cache (currencyPair TEXT NOT NULL PRIMARY KEY, rate TEXT NOT NULL, updatedAt INTEGER NOT NULL)")
     }
 }
+
+val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS watchlist_items (" +
+                    "symbol TEXT NOT NULL PRIMARY KEY, " +
+                    "assetClass TEXT NOT NULL, " +
+                    "position INTEGER NOT NULL, " +
+                    "addedAt INTEGER NOT NULL)"
+            )
+        }
+}
+
+val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS journal_accounts (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "name TEXT NOT NULL, " +
+                        "type TEXT NOT NULL, " +
+                        "currency TEXT NOT NULL, " +
+                        "startingBalance TEXT NOT NULL, " +
+                        "maxRiskPerTradePercent TEXT NOT NULL, " +
+                        "dailyLossLimitPercent TEXT NOT NULL, " +
+                        "maxOpenRiskPercent TEXT NOT NULL, " +
+                        "maxDrawdownPercent TEXT NOT NULL, " +
+                        "drawdownMode TEXT NOT NULL, " +
+                        "resetTimezone TEXT NOT NULL, " +
+                        "createdAt INTEGER NOT NULL, " +
+                        "archived INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "INSERT INTO journal_accounts " +
+                        "(id, name, type, currency, startingBalance, maxRiskPerTradePercent, dailyLossLimitPercent, " +
+                        "maxOpenRiskPercent, maxDrawdownPercent, drawdownMode, resetTimezone, createdAt, archived) " +
+                        "SELECT 1, 'Account 1', 'LIVE', currency, startingBalance, maxRiskPerTradePercent, " +
+                        "dailyLossLimitPercent, maxOpenRiskPercent, maxDrawdownPercent, drawdownMode, resetTimezone, " +
+                        "CAST(strftime('%s','now') AS INTEGER) * 1000, 0 FROM account_settings WHERE id = 1"
+                )
+                db.execSQL(
+                    "INSERT INTO journal_accounts " +
+                        "(id, name, type, currency, startingBalance, maxRiskPerTradePercent, dailyLossLimitPercent, " +
+                        "maxOpenRiskPercent, maxDrawdownPercent, drawdownMode, resetTimezone, createdAt, archived) " +
+                        "SELECT 1, 'Account 1', 'LIVE', 'USD', '10000', '1', '3', '5', '10', 'STATIC', " +
+                        "'Africa/Nairobi', CAST(strftime('%s','now') AS INTEGER) * 1000, 0 " +
+                        "WHERE NOT EXISTS (SELECT 1 FROM journal_accounts WHERE id = 1)"
+                )
+
+                db.execSQL("ALTER TABLE journal_entries RENAME TO journal_entries_v6")
+                db.execSQL(
+                    "CREATE TABLE journal_entries (" +
+                        "id TEXT NOT NULL PRIMARY KEY, createdAt INTEGER NOT NULL, symbol TEXT NOT NULL, " +
+                        "assetClass TEXT NOT NULL, direction TEXT NOT NULL, entry TEXT NOT NULL, stop TEXT NOT NULL, " +
+                        "stopIsPips INTEGER NOT NULL, takeProfit TEXT, lots TEXT NOT NULL, riskAmount TEXT NOT NULL, " +
+                        "riskPercent TEXT NOT NULL, accountCurrency TEXT NOT NULL, status TEXT NOT NULL, openedAt INTEGER, " +
+                        "closedAt INTEGER, exitPrice TEXT, pnl TEXT, rMultiple TEXT, notes TEXT NOT NULL, tags TEXT NOT NULL, " +
+                        "accountId INTEGER NOT NULL, setupId TEXT, checklistResult TEXT NOT NULL)"
+                )
+                db.execSQL(
+                    "INSERT INTO journal_entries " +
+                        "(id, createdAt, symbol, assetClass, direction, entry, stop, stopIsPips, takeProfit, lots, " +
+                        "riskAmount, riskPercent, accountCurrency, status, openedAt, closedAt, exitPrice, pnl, rMultiple, " +
+                        "notes, tags, accountId, setupId, checklistResult) " +
+                        "SELECT id, createdAt, symbol, assetClass, direction, entry, stop, stopIsPips, takeProfit, lots, " +
+                        "riskAmount, riskPercent, accountCurrency, status, openedAt, closedAt, exitPrice, pnl, rMultiple, " +
+                        "notes, tags, 1, NULL, '' FROM journal_entries_v6"
+                )
+                db.execSQL("DROP TABLE journal_entries_v6")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_journal_entries_accountId ON journal_entries(accountId)")
+
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS trade_setups (" +
+                        "id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL, tags TEXT NOT NULL, " +
+                        "checklist TEXT NOT NULL, color TEXT NOT NULL, archived INTEGER NOT NULL, createdAt INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS daily_entries (" +
+                        "id TEXT NOT NULL PRIMARY KEY, accountId INTEGER, date TEXT NOT NULL, planFollowed INTEGER, " +
+                        "mood TEXT NOT NULL, energy INTEGER, notes TEXT NOT NULL, lessons TEXT NOT NULL, tags TEXT NOT NULL)"
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_daily_entries_date ON daily_entries(date)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS journal_attachments (" +
+                        "id TEXT NOT NULL PRIMARY KEY, ownerType TEXT NOT NULL, ownerId TEXT NOT NULL, " +
+                        "filePath TEXT NOT NULL, createdAt INTEGER NOT NULL)"
+                )
+            }
+        }

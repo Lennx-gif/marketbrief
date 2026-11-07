@@ -48,6 +48,32 @@ object GuardrailEvaluator {
 }
 
 data class ClosedTradeResult(val pnl: BigDecimal, val rMultiple: BigDecimal)
+data class ScopedClosedTrade(val accountId: Long, val setupId: String?, val result: ClosedTradeResult)
+
+object JournalAnalytics {
+    fun statsByAccount(trades: List<ScopedClosedTrade>): Map<Long, TradeStats> =
+        trades.groupBy { it.accountId }.mapValues { (_, scoped) ->
+            TradeStats.calculate(scoped.map { it.result })
+        }
+
+    fun statsBySetup(trades: List<ScopedClosedTrade>): Map<String, TradeStats> =
+        trades.filter { it.setupId != null }.groupBy { it.setupId!! }.mapValues { (_, scoped) ->
+            TradeStats.calculate(scoped.map { it.result })
+        }
+
+    fun accountBalance(startingBalance: BigDecimal, closedPnls: Iterable<BigDecimal>): BigDecimal =
+        closedPnls.fold(startingBalance, BigDecimal::add)
+
+    fun checklistScore(completed: Int, total: Int): BigDecimal? {
+        if (total <= 0) return null
+        return BigDecimal(completed.coerceIn(0, total))
+            .multiply(HUNDRED)
+            .divide(BigDecimal(total), MathContext.DECIMAL128)
+    }
+
+    private val HUNDRED = BigDecimal("100")
+}
+
 data class TradeStats(
     val closedCount: Int,
     val winRate: BigDecimal,

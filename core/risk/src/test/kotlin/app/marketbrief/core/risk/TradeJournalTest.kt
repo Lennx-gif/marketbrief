@@ -32,4 +32,19 @@ class TradeJournalTest {
         val account = AccountRiskState(D("10000"), D("9500"), D("11000"), D("0"), D("0"))
         assertTrue(GuardrailEvaluator.evaluate(rules, account, ProposedTrade(D("100"))).any { it.rule == "maxDrawdown" })
     }
+
+    @Test fun journalAnalyticsGroupByAccountAndSetupAndComputeBalance() {
+        val trades = listOf(
+            ScopedClosedTrade(1, "breakout", ClosedTradeResult(D("100"), D("1"))),
+            ScopedClosedTrade(1, "breakout", ClosedTradeResult(D("-50"), D("-0.5"))),
+            ScopedClosedTrade(2, null, ClosedTradeResult(D("25"), D("0.5")))
+        )
+
+        assertEquals(2, JournalAnalytics.statsByAccount(trades).size)
+        assertEquals(2, JournalAnalytics.statsByAccount(trades)[1L]?.closedCount)
+        assertEquals(1, JournalAnalytics.statsBySetup(trades).size)
+        assertEquals(D("1050"), JournalAnalytics.accountBalance(D("1000"), listOf(D("100"), D("-50"))))
+        assertTrue(JournalAnalytics.checklistScore(2, 3)!!.compareTo(D("66.666")) > 0)
+        assertNull(JournalAnalytics.checklistScore(0, 0))
+    }
 }

@@ -42,7 +42,8 @@ data class Banner(
 data class ArticleUi(
     val article: Article,
     val bookmarked: Boolean,
-    val downloaded: Boolean
+    val downloaded: Boolean,
+    val relatedQuote: app.marketbrief.core.model.Quote? = null
 )
 
 data class FeedUiState(
@@ -50,17 +51,22 @@ data class FeedUiState(
     val selectedCategories: Set<Category> = setOf(Category.All),
     val country: CountryFilter = CountryFilter.Global,
     val homeCountryName: String = "Kenya",
+    val feedSearchText: String = "",
     val isRefreshing: Boolean = false,
     val banner: Banner? = null,
     val savedSearchText: String = "",
     val savedTags: List<String> = emptyList(),
     val selectedSavedTag: String? = null,
-    val usdKesRate: Double? = null
+    val usdKesRate: Double? = null,
+    val showSourceStrip: Boolean = false,
+    val showMarketTicker: Boolean = false
 )
 
 sealed interface FeedAction {
     data class ToggleCategory(val category: Category) : FeedAction
     data class SetCountry(val filter: CountryFilter) : FeedAction
+    data class SetSourceStrip(val enabled: Boolean) : FeedAction
+    data class SetMarketTicker(val enabled: Boolean) : FeedAction
     data class ToggleBookmark(val article: Article) : FeedAction
     data class Download(val articleId: String) : FeedAction
     data object Refresh : FeedAction
@@ -82,9 +88,11 @@ class NewsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val query = MutableStateFlow(FeedQuery())
+    private val queryLoaded = MutableStateFlow(false)
     private val refreshing = MutableStateFlow(false)
     private val banner = MutableStateFlow<Banner?>(null)
     private val savedSearch = MutableStateFlow("")
+    private val feedSearch = MutableStateFlow("")
     private val selectedSavedTag = MutableStateFlow<String?>(null)
     private val gate = EntitlementChecker(planSource.plan)
     private val usdKes = MutableStateFlow<Double?>(null)
@@ -107,9 +115,25 @@ class NewsViewModel @Inject constructor(
         query.flatMapLatest { repository.observeFeed(it) },
         savedSearchResults,
         repository.observeBookmarkIds(),
-        repository.observeDownloadedIds()
-    ) { articles, searchResults, saved, downloaded ->
-        (searchResults ?: articles).map { ArticleUi(it, it.id in saved, it.id in downloaded) }
+        repository.observeDownloadedIds(),
+        marketData.quotes
+    ) { articles, searchResults, saved, downloaded, quotes ->
+        val quotesBySymbol = quotes.values.associateBy { it.assetId.symbol.uppercase() }
+        (searchResults ?: articles).map { article ->
+            val requestedSymbols = article.relatedSymbols.map { symbol ->
+                when (symbol.uppercase()) {
+                    "XAU" -> "XAUUSD"
+                    "BTC" -> "BTCUSD"
+                    else -> symbol.uppercase()
+                }
+            }
+            ArticleUi(
+                article = article,
+                bookmarked = article.id in saved,
+                downloaded = article.id in downloaded,
+                relatedQuote = requestedSymbols.firstNotNullOfOrNull(quotesBySymbol::get)
+            )
+        }
     }
 
     private val metaFlow = combine(
@@ -117,9 +141,18 @@ class NewsViewModel @Inject constructor(
         prefs.homeCountry,
         refreshing,
         banner,
-        savedSearch
-    ) { q, homeCountry, isRef, b, search ->
-        FeedMeta(q, homeCountry, isRef, b, search)
+        combine(savedSearch, feedSearch) { saved, feed -> saved to feed }
+    ) { q, homeCountry, isRef, b, searches ->
+        FeedMeta(q, homeCountry, isRef, b, searches.first, searches.second)
+    }
+
+    private val displayPrefsFlow = combine(
+        prefs.showSourceStrip,
+        prefs.showMarketTickerOnFeed
+    ) { showSources, showTicker -> showSources to showTicker }
+
+    private val rateAndDisplayFlow = combine(usdKes, displayPrefsFlow) { rate, displayPrefs ->
+        rate to displayPrefs
     }
 
     val uiState: StateFlow<FeedUiState> = combine(
@@ -127,24 +160,42 @@ class NewsViewModel @Inject constructor(
         metaFlow,
         repository.observeSavedTags(),
         selectedSavedTag,
-        usdKes
-    ) { articlesUi, meta, tags, tag, rate ->
+        rateAndDisplayFlow
+    ) { articlesUi, meta, tags, tag, rateAndDisplay ->
+        val rate = rateAndDisplay.first
+        val displayPrefs = rateAndDisplay.second
+        val searchText = if (Category.Saved in meta.query.categories) meta.savedSearch else meta.feedSearch
+        val visibleArticles = if (searchText.isBlank()) articlesUi else articlesUi.filter { item ->
+            item.article.title.contains(searchText, ignoreCase = true) ||
+                item.article.summary.contains(searchText, ignoreCase = true) ||
+                item.article.sourceName.contains(searchText, ignoreCase = true)
+        }
         FeedUiState(
-            articles = articlesUi,
+            articles = visibleArticles,
             selectedCategories = meta.query.categories,
             country = meta.query.country,
             homeCountryName = meta.homeCountry,
+            feedSearchText = meta.feedSearch,
             isRefreshing = meta.isRefreshing,
             banner = meta.banner,
             savedSearchText = meta.savedSearch,
             savedTags = tags,
             selectedSavedTag = tag,
-            usdKesRate = rate
+            usdKesRate = rate,
+            showSourceStrip = displayPrefs.first,
+            showMarketTicker = displayPrefs.second
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FeedUiState())
 
     init {
-        refresh()
+        viewModelScope.launch {
+            query.value = FeedQuery(
+                categories = prefs.feedCategories.first(),
+                country = prefs.feedCountry.first()
+            )
+            queryLoaded.value = true
+            refresh()
+        }
         viewModelScope.launch {
             prefs.kenyaTradeLens.collect { enabled ->
                 if (enabled) {
@@ -160,9 +211,17 @@ class NewsViewModel @Inject constructor(
         when (action) {
             is FeedAction.ToggleCategory -> {
                 query.value = query.value.toggle(action.category)
+                persistFeedQuery()
             }
             is FeedAction.SetCountry -> {
                 query.value = query.value.copy(country = action.filter)
+                viewModelScope.launch { prefs.setFeedCountry(action.filter) }
+            }
+            is FeedAction.SetSourceStrip -> {
+                viewModelScope.launch { prefs.setShowSourceStrip(action.enabled) }
+            }
+            is FeedAction.SetMarketTicker -> {
+                viewModelScope.launch { prefs.setShowMarketTickerOnFeed(action.enabled) }
             }
             is FeedAction.ToggleBookmark -> {
                 handleBookmarkToggle(action.article)
@@ -181,6 +240,7 @@ class NewsViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
+            if (!queryLoaded.value) return@launch
             refreshing.value = true
             when (val result = repository.refresh(query.value)) {
                 is RefreshResult.Success -> {
@@ -206,7 +266,13 @@ class NewsViewModel @Inject constructor(
     }
 
     fun onSavedSearchChanged(value: String) { savedSearch.value = value }
+    fun onFeedSearchChanged(value: String) { feedSearch.value = value }
     fun onSavedTagSelected(value: String?) { selectedSavedTag.value = value }
+
+    private fun persistFeedQuery() {
+        val selected = query.value
+        viewModelScope.launch { prefs.setFeedCategories(selected.categories) }
+    }
 
     private fun handleBookmarkToggle(article: Article) {
         when (val check = gate.gate(Feature.NEWS_SAVED)) {
@@ -258,5 +324,6 @@ private data class FeedMeta(
     val homeCountry: String,
     val isRefreshing: Boolean,
     val banner: Banner?,
-    val savedSearch: String
+    val savedSearch: String,
+    val feedSearch: String
 )

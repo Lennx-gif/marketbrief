@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -20,6 +21,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +44,7 @@ import app.marketbrief.core.storage.db.TradeLogEntity
 import app.marketbrief.core.ui.components.AppleBanner
 import app.marketbrief.core.ui.components.AppleGroupedSection
 import app.marketbrief.core.ui.components.AppleHairlineDivider
+import app.marketbrief.core.ui.components.ApplePillChip
 import app.marketbrief.feature.calculator.ui.CalculatorInputSection
 import app.marketbrief.feature.calculator.ui.CalculatorResultCard
 import app.marketbrief.feature.calculator.ui.CalculatorViewModel
@@ -75,6 +78,23 @@ fun CalculatorScreen(
         )
     }
 
+    if (uiState.showSaveJournalDialog) {
+        SaveJournalSetupDialog(
+            accounts = uiState.journalAccounts,
+            setups = uiState.journalSetups,
+            selectedAccountId = uiState.selectedJournalAccountId,
+            selectedSetupId = uiState.selectedJournalSetupId,
+            selectedChecklistItems = uiState.selectedChecklistItems,
+            guardrailWarnings = uiState.guardrailWarnings,
+            message = uiState.setupMessage,
+            onAccountSelected = viewModel::selectJournalAccount,
+            onSetupSelected = viewModel::selectJournalSetup,
+            onChecklistItemChanged = viewModel::toggleChecklistItem,
+            onSave = viewModel::saveSetup,
+            onDismiss = viewModel::dismissSaveSetupDialog
+        )
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
@@ -86,13 +106,28 @@ fun CalculatorScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Position Calculator", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                TextButton(onClick = onOpenJournal) { Text("Journal") }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Position Calculator",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.5).sp,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                ApplePillChip(
+                    text = "Journal",
+                    isSelected = true,
+                    onClick = onOpenJournal
+                )
             }
+
             Text(
                 text = "Position Sizer",
-                fontSize = 32.sp,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = (-0.8).sp,
                 color = MaterialTheme.colorScheme.onBackground
@@ -160,13 +195,20 @@ fun CalculatorScreen(
                 RateUsedRow(uiState = uiState)
                 if (uiState.guardrailWarnings.isNotEmpty()) {
                     AppleBanner(message = "BLOCK: ${uiState.guardrailWarnings.joinToString()}", isWarning = true)
-                    Button(onClick = { viewModel.saveSetup(saveAnyway = true) }, modifier = Modifier.fillMaxWidth()) { Text("Save anyway") }
+                    Button(onClick = viewModel::showSaveSetupDialog, modifier = Modifier.fillMaxWidth()) { Text("Save anyway") }
                 } else {
-                    Button(onClick = { viewModel.saveSetup() }, modifier = Modifier.fillMaxWidth()) { Text("Save setup to journal") }
+                    Button(onClick = viewModel::showSaveSetupDialog, modifier = Modifier.fillMaxWidth()) { Text("Save setup to journal") }
                 }
             }
 
-            uiState.setupMessage?.let { AppleBanner(message = it, isWarning = false) }
+            uiState.setupMessage?.let { message ->
+                AppleBanner(
+                    message = message,
+                    isWarning = message.startsWith("BLOCK:") ||
+                        message.startsWith("Choose an active") ||
+                        message.startsWith("Calculator currency")
+                )
+            }
 
             uiState.error?.let { error ->
                 AppleBanner(message = error, isWarning = true)
@@ -180,6 +222,86 @@ fun CalculatorScreen(
             }
         }
     }
+}
+
+@Composable
+private fun SaveJournalSetupDialog(
+    accounts: List<app.marketbrief.core.storage.db.JournalAccountEntity>,
+    setups: List<app.marketbrief.core.storage.db.TradeSetupEntity>,
+    selectedAccountId: Long?,
+    selectedSetupId: String?,
+    selectedChecklistItems: Set<String>,
+    guardrailWarnings: List<String>,
+    message: String?,
+    onAccountSelected: (Long?) -> Unit,
+    onSetupSelected: (String?) -> Unit,
+    onChecklistItemChanged: (String, Boolean) -> Unit,
+    onSave: (Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val selectedSetup = setups.firstOrNull { it.id == selectedSetupId }
+    val checklist = selectedSetup?.checklist?.lines()?.filter { it.isNotBlank() }.orEmpty()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Save planned trade") },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text("Account")
+                if (accounts.isEmpty()) {
+                    Text("No active journal accounts are available.")
+                } else {
+                    accounts.forEach { account ->
+                        TextButton(onClick = { onAccountSelected(account.id) }) {
+                            Text(
+                                if (selectedAccountId == account.id) "• ${account.name} (${account.currency})"
+                                else "${account.name} (${account.currency})"
+                            )
+                        }
+                    }
+                }
+                Text("Setup (optional)", style = MaterialTheme.typography.titleSmall)
+                TextButton(onClick = { onSetupSelected(null) }) {
+                    Text(if (selectedSetupId == null) "• No setup" else "No setup")
+                }
+                setups.forEach { setup ->
+                    TextButton(onClick = { onSetupSelected(setup.id) }) {
+                        Text(if (selectedSetupId == setup.id) "• ${setup.name}" else setup.name)
+                    }
+                }
+                checklist.forEachIndexed { index, item ->
+                    val key = "$index:$item"
+                    androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = key in selectedChecklistItems,
+                            onCheckedChange = { onChecklistItemChanged(key, it) }
+                        )
+                        Text(item)
+                    }
+                }
+                if (guardrailWarnings.isNotEmpty()) {
+                    AppleBanner(
+                        message = "Account rule warning: ${guardrailWarnings.joinToString()}",
+                        isWarning = true
+                    )
+                }
+                message?.let { AppleBanner(message = it, isWarning = true) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(false) }) { Text("Save planned trade") }
+        },
+        dismissButton = {
+            androidx.compose.foundation.layout.Row {
+                if (guardrailWarnings.isNotEmpty()) {
+                    TextButton(onClick = { onSave(true) }) { Text("Override and save") }
+                }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
+    )
 }
 
 @Composable

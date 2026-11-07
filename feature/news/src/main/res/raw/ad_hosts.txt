@@ -1,0 +1,13 @@
+# MarketBrief Minimal Ad Host Set
+# Project-authored and released under CC0-1.0.
+# Created 2026-11-06; small baseline only, not a comprehensive blocklist.
+doubleclick.net
+googleadservices.com
+googlesyndication.com
+googletagservices.com
+adservice.google.com
+adsrvr.org
+taboola.com
+outbrain.com
+scorecardresearch.com
+quantserve.com

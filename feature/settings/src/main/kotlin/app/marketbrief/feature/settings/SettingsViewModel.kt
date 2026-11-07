@@ -2,6 +2,7 @@ package app.marketbrief.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.marketbrief.core.data.RateRepository
 import app.marketbrief.core.data.positioning.PositioningRepository
 import app.marketbrief.core.data.DailyDigestScheduler
 import app.marketbrief.core.data.NewsRepository
@@ -36,7 +37,10 @@ data class SettingsUiState(
     val cachedArticleCount: Int = 0,
     val myfxbookConnected: Boolean = false,
     val myfxbookBusy: Boolean = false,
-    val myfxbookMessage: String? = null
+    val myfxbookMessage: String? = null,
+    val lastMarketRefreshEpochMillis: Long = 0L,
+    val showMarketTickerOnFeed: Boolean = false,
+    val inAppArticleFallback: Boolean = true
 )
 
 private data class GeneralPrefs(val country: String, val theme: String, val analysis: String, val digestTime: String, val homeOnly: Boolean, val quietHours: String, val currency: String)
@@ -49,7 +53,8 @@ class SettingsViewModel @Inject constructor(
     private val articleDao: ArticleDao,
     private val positioning: PositioningRepository,
     private val digestScheduler: DailyDigestScheduler,
-    private val newsRepository: NewsRepository
+    private val newsRepository: NewsRepository,
+    rateRepository: RateRepository
 ) : ViewModel() {
 
     private val myfxbookBusy = MutableStateFlow(false)
@@ -99,12 +104,21 @@ class SettingsViewModel @Inject constructor(
 
     private val sourcePrefsFlow = combine(newsRepository.observeAvailableSources(), newsRepository.observeSourcePreferences()) { names, weights -> names to weights }
 
+    private val readerPrefsFlow = combine(
+        prefs.inAppArticleFallback,
+        prefs.showMarketTickerOnFeed,
+        rateRepository.lastUpdated
+    ) { inAppFallback, ticker, lastRefresh ->
+        Triple(inAppFallback, ticker, lastRefresh)
+    }
+
     val uiState: StateFlow<SettingsUiState> = combine(
         generalPrefsFlow,
         operationalPrefsFlow,
         myfxbookFlow,
-        sourcePrefsFlow
-    ) { general, op, fx, sources ->
+        sourcePrefsFlow,
+        readerPrefsFlow
+    ) { general, op, fx, sources, reader ->
         SettingsUiState(
             homeCountry = general.country,
             accountCurrency = general.currency,
@@ -124,7 +138,10 @@ class SettingsViewModel @Inject constructor(
             cachedArticleCount = op.count,
             myfxbookConnected = fx.first,
             myfxbookBusy = fx.second,
-            myfxbookMessage = fx.third
+            myfxbookMessage = fx.third,
+            inAppArticleFallback = reader.first,
+            showMarketTickerOnFeed = reader.second,
+            lastMarketRefreshEpochMillis = reader.third
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiState())
 
@@ -162,6 +179,8 @@ class SettingsViewModel @Inject constructor(
     fun setHomeOnlyDigest(enabled: Boolean) { viewModelScope.launch { prefs.setHomeCountryOnlyDigest(enabled) } }
     fun setQuietHours(value: String) { viewModelScope.launch { prefs.setQuietHours(value) } }
     fun setKenyaTradeLens(enabled: Boolean) { viewModelScope.launch { prefs.setKenyaTradeLens(enabled) } }
+    fun setShowMarketTickerOnFeed(enabled: Boolean) { viewModelScope.launch { prefs.setShowMarketTickerOnFeed(enabled) } }
+    fun setInAppArticleFallback(enabled: Boolean) { viewModelScope.launch { prefs.setInAppArticleFallback(enabled) } }
     fun setSourcePreference(source: String, weight: String) { viewModelScope.launch { newsRepository.setSourcePreference(source, weight) } }
 
     fun clearCachedNews() {

@@ -1,8 +1,7 @@
 package app.marketbrief.feature.news
 
 import android.content.Intent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,30 +17,35 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,7 +57,7 @@ import app.marketbrief.core.model.CountryFilter
 import app.marketbrief.core.ui.components.AppleBanner
 import app.marketbrief.core.ui.components.AppleGroupedSection
 import app.marketbrief.core.ui.components.ApplePillChip
-import app.marketbrief.core.ui.components.AppleSegmentedControl
+import app.marketbrief.core.ui.components.FilterChipRow
 import app.marketbrief.core.ui.theme.MarketBriefTheme
 import app.marketbrief.feature.news.ui.ArticleCard
 import app.marketbrief.feature.news.ui.FeedAction
@@ -74,6 +78,21 @@ fun NewsScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showFilters by remember { mutableStateOf(false) }
+    var categoryRowVisible by remember { mutableStateOf(true) }
+    val categoryScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (consumed.y < -1f) categoryRowVisible = false
+                if (consumed.y > 1f) categoryRowVisible = true
+                return Offset.Zero
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -93,15 +112,30 @@ fun NewsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Apple Minimalist Header
             FeedHeader(
                 homeCountry = uiState.homeCountryName,
                 countryFilter = uiState.country,
-                isSavedFilterActive = Category.Saved in uiState.selectedCategories,
-                onCountryFilterSelected = { viewModel.onAction(FeedAction.SetCountry(it)) },
-                onSavedToggle = { viewModel.onAction(FeedAction.ToggleCategory(Category.Saved)) },
+                onOpenFilters = { showFilters = true },
                 onOpenSettings = onOpenSettings
             )
+
+            OutlinedTextField(
+                value = uiState.feedSearchText,
+                onValueChange = viewModel::onFeedSearchChanged,
+                placeholder = { Text("Search articles...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp)
+            )
+
+            AnimatedVisibility(visible = categoryRowVisible) {
+                CategoryFilterBar(
+                    selectedCategories = uiState.selectedCategories,
+                    onCategoryClick = { viewModel.onAction(FeedAction.ToggleCategory(it)) },
+                    onFilterClick = { showFilters = true }
+                )
+            }
 
             if (Category.Saved in uiState.selectedCategories) {
                 OutlinedTextField(
@@ -122,12 +156,6 @@ fun NewsScreen(
                     }
                 }
             }
-
-            // Horizontally Scrollable Category Filter Row
-            CategoryFilterBar(
-                selectedCategories = uiState.selectedCategories,
-                onCategoryClick = { viewModel.onAction(FeedAction.ToggleCategory(it)) }
-            )
 
             if (uiState.usdKesRate != null) {
                 Surface(
@@ -158,9 +186,9 @@ fun NewsScreen(
             PullToRefreshBox(
                 isRefreshing = uiState.isRefreshing,
                 onRefresh = { viewModel.onAction(FeedAction.Refresh) },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize().nestedScroll(categoryScrollConnection)
             ) {
-                if (uiState.articles.isEmpty() && !uiState.isRefreshing) {
+                if (uiState.articles.isEmpty()) {
                     EmptyFeedPlaceholder(
                         isSavedView = Category.Saved in uiState.selectedCategories,
                         onResetFilter = { viewModel.onAction(FeedAction.ToggleCategory(Category.All)) }
@@ -182,10 +210,20 @@ fun NewsScreen(
                             context.startActivity(Intent.createChooser(intent, "Share Article"))
                         }
 
-                        item(key = "sources") {
-                            SourceStrip(sources = uiState.articles.map { it.article.sourceName }.distinct().take(12))
+                        if (uiState.showSourceStrip) {
+                            item(key = "sources") {
+                                SourceStrip(sources = uiState.articles.map { it.article.sourceName }.distinct().take(12))
+                            }
                         }
-                        item(key = "trending-header") { SectionHeader(title = "Today trending \uD83D\uDD25") }
+                        if (uiState.showMarketTicker) {
+                            item(key = "cached-market-ticker") {
+                                FeedMarketTicker(
+                                    quotes = uiState.articles.mapNotNull { it.relatedQuote }
+                                        .distinctBy { it.assetId }
+                                )
+                            }
+                        }
+                        item(key = "featured-header") { SectionHeader(title = "Featured News", actionLabel = "View More") }
                         item(key = "hero") {
                             TrendingHeroCard(
                                 article = hero.article,
@@ -195,7 +233,7 @@ fun NewsScreen(
                             )
                         }
                         if (rest.isNotEmpty()) {
-                            item(key = "latest-header") { SectionHeader(title = "Latest news") }
+                            item(key = "breaking-header") { SectionHeader(title = "Breaking News", actionLabel = "View More") }
                         }
                         items(
                             items = rest,
@@ -205,6 +243,7 @@ fun NewsScreen(
                                 article = item.article,
                                 isBookmarked = item.bookmarked,
                                 isDownloaded = item.downloaded,
+                                relatedQuote = item.relatedQuote,
                                 onClick = { onOpenArticle(item.article.id) },
                                 onBookmarkToggle = { viewModel.onAction(FeedAction.ToggleBookmark(item.article)) },
                                 onDownload = { viewModel.onAction(FeedAction.Download(item.article.id)) },
@@ -213,6 +252,52 @@ fun NewsScreen(
                             )
                         }
                     }
+
+                }
+            }
+        }
+    }
+
+    if (showFilters) {
+        ModalBottomSheet(onDismissRequest = { showFilters = false }) {
+            FeedFilterSheet(
+                homeCountry = uiState.homeCountryName,
+                countryFilter = uiState.country,
+                showSourceStrip = uiState.showSourceStrip,
+                onCountryFilterSelected = { viewModel.onAction(FeedAction.SetCountry(it)) },
+                onSourceStripChanged = { viewModel.onAction(FeedAction.SetSourceStrip(it)) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun FeedMarketTicker(quotes: List<app.marketbrief.core.model.Quote>) {
+    if (quotes.isEmpty()) return
+    LazyRow(
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(quotes, key = { it.assetId.toString() }) { quote ->
+            val change = quote.changePercent
+            val up = change != null && change >= 0.0
+            val stale = System.currentTimeMillis() - quote.timestamp > 5 * 60_000L
+            Surface(shape = RoundedCornerShape(100.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(quote.assetId.symbol, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(java.math.BigDecimal.valueOf(quote.mid).stripTrailingZeros().toPlainString(), fontSize = 11.sp)
+                    change?.let {
+                        Text(
+                            "${if (up) "↑" else "↓"} ${String.format(java.util.Locale.US, "%.2f", kotlin.math.abs(it))}%",
+                            fontSize = 11.sp,
+                            color = if (stale) MaterialTheme.colorScheme.onSurfaceVariant else if (up) MarketBriefTheme.colors.bullish else MarketBriefTheme.colors.bearish
+                        )
+                    }
+                    if (stale) Text("stale", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -223,16 +308,14 @@ fun NewsScreen(
 fun FeedHeader(
     homeCountry: String,
     countryFilter: CountryFilter,
-    isSavedFilterActive: Boolean,
-    onCountryFilterSelected: (CountryFilter) -> Unit,
-    onSavedToggle: () -> Unit,
+    onOpenFilters: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -241,23 +324,24 @@ fun FeedHeader(
         ) {
             Column {
                 Text(
-                    text = "MarketBrief",
+                    text = "Breaking News",
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.8).sp,
                     color = MaterialTheme.colorScheme.onBackground
                 )
-                val subtitle = when (countryFilter) {
-                    is CountryFilter.Global -> "Global Financial Intelligence"
-                    is CountryFilter.Home -> "$homeCountry Trade & Macro"
-                    is CountryFilter.Only -> {
-                        val names = countryFilter.isoCodes.joinToString(", ")
-                        "$names Intelligence"
-                    }
-                }
                 Text(
-                    text = subtitle,
+                    text = "Financial News Page",
                     fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = when (countryFilter) {
+                        is CountryFilter.Global -> "Global"
+                        is CountryFilter.Home -> homeCountry
+                        is CountryFilter.Only -> countryFilter.isoCodes.joinToString(", ")
+                    },
+                    fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -266,12 +350,21 @@ fun FeedHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                IconButton(onClick = onSavedToggle) {
-                    Icon(
-                        imageVector = if (isSavedFilterActive) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                        contentDescription = "Saved Articles",
-                        tint = if (isSavedFilterActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                IconButton(onClick = onOpenFilters) {
+                    Box {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = "Feed filters",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (countryFilter !is CountryFilter.Global) {
+                            Surface(
+                                modifier = Modifier.align(Alignment.TopEnd).size(7.dp),
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.primary
+                            ) {}
+                        }
+                    }
                 }
 
                 IconButton(onClick = onOpenSettings) {
@@ -284,57 +377,18 @@ fun FeedHeader(
             }
         }
 
-        // Multi-location selection with Global as the default
-        val activeCountries = when (countryFilter) {
-            is CountryFilter.Only -> countryFilter.isoCodes
-            is CountryFilter.Home -> setOf(homeCountry)
-            is CountryFilter.Global -> emptySet()
-        }
-        val isGlobal = countryFilter is CountryFilter.Global
-        val locationOptions = listOf("Global", homeCountry, "United States", "United Kingdom", "Eurozone", "Japan")
-
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                ApplePillChip(
-                    text = "Global",
-                    isSelected = isGlobal,
-                    onClick = { onCountryFilterSelected(CountryFilter.Global) }
-                )
-            }
-            items(locationOptions.filter { it != "Global" }) { loc ->
-                val isSelected = loc in activeCountries
-                ApplePillChip(
-                    text = loc,
-                    isSelected = isSelected,
-                    onClick = {
-                        val next = if (isSelected) {
-                            activeCountries - loc
-                        } else {
-                            activeCountries + loc
-                        }
-                        if (next.isEmpty()) {
-                            onCountryFilterSelected(CountryFilter.Global)
-                        } else {
-                            onCountryFilterSelected(CountryFilter.Only(next))
-                        }
-                    }
-                )
-            }
-        }
     }
 }
 
 @Composable
 fun CategoryFilterBar(
     selectedCategories: Set<Category>,
-    onCategoryClick: (Category) -> Unit
+    onCategoryClick: (Category) -> Unit,
+    onFilterClick: () -> Unit
 ) {
     val categories = listOf(
-        Category.All,
         Category.Saved,
+        Category.All,
         Category.Trade,
         Category.Finance,
         Category.Forex,
@@ -345,19 +399,60 @@ fun CategoryFilterBar(
         Category.Commodities
     )
 
-    LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    FilterChipRow(
+        items = categories,
+        selectedItem = null,
+        selectedItems = selectedCategories,
+        onItemSelected = onCategoryClick,
+        modifier = Modifier.padding(vertical = 6.dp),
+        labelProvider = { if (it == Category.All) "Trending" else it.label },
+        trailingAction = {
+            IconButton(onClick = onFilterClick) {
+                Icon(Icons.Default.Tune, contentDescription = "Region and source filters")
+            }
+        }
+    )
+}
+
+@Composable
+private fun FeedFilterSheet(
+    homeCountry: String,
+    countryFilter: CountryFilter,
+    showSourceStrip: Boolean,
+    onCountryFilterSelected: (CountryFilter) -> Unit,
+    onSourceStripChanged: (Boolean) -> Unit
+) {
+    val countries = listOf(homeCountry, "United States", "United Kingdom", "Eurozone", "Japan", "South Africa")
+    val selectedCountries = (countryFilter as? CountryFilter.Only)?.isoCodes.orEmpty()
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(categories) { category ->
-            ApplePillChip(
-                text = category.label,
-                isSelected = category in selectedCategories,
-                onClick = { onCategoryClick(category) }
-            )
+        Text("Region", style = MaterialTheme.typography.titleMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ApplePillChip("Global", countryFilter is CountryFilter.Global, { onCountryFilterSelected(CountryFilter.Global) })
+            ApplePillChip("Home", countryFilter is CountryFilter.Home, { onCountryFilterSelected(CountryFilter.Home) })
+        }
+        Text("Choose countries", style = MaterialTheme.typography.titleSmall)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(countries) { country ->
+                val selected = country in selectedCountries
+                ApplePillChip(country, selected, {
+                    val next = if (selected) selectedCountries - country else selectedCountries + country
+                    onCountryFilterSelected(if (next.isEmpty()) CountryFilter.Global else CountryFilter.Only(next))
+                })
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Show source strip", style = MaterialTheme.typography.bodyMedium)
+                Text("Keep it with the scrolling stories", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = showSourceStrip, onCheckedChange = onSourceStripChanged)
         }
     }
 }

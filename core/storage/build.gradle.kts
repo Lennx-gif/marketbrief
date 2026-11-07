@@ -45,6 +45,7 @@ dependencies {
     testImplementation(libs.turbine)
     androidTestImplementation("androidx.room:room-testing:2.6.1")
     androidTestImplementation("androidx.test:core:1.5.0")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }
 
 kapt {
@@ -61,4 +62,3 @@ tasks.withType<org.jetbrains.kotlin.gradle.internal.KaptWithoutKotlincTask>().co
     kaptProcessJvmArgs.add("-Djava.io.tmpdir=${kaptTempDirectory.absolutePath}")
     kaptProcessJvmArgs.add("-Dorg.sqlite.tmpdir=${kaptTempDirectory.absolutePath}")
 }
-

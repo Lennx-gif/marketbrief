@@ -3,6 +3,7 @@ package app.marketbrief.feature.news.ui
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.animation.AnimatedVisibility
@@ -32,10 +33,12 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -74,6 +77,7 @@ import app.marketbrief.core.storage.db.DownloadDao
 import app.marketbrief.core.ui.components.AppleBanner
 import app.marketbrief.core.ui.components.AppleHairlineDivider
 import app.marketbrief.core.ui.theme.MarketBriefTheme
+import android.webkit.WebView
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -89,7 +93,8 @@ fun ArticleDetailScreen(
     downloadDao: DownloadDao,
     newsRepository: NewsRepository,
     onBack: () -> Unit,
-    onSizeTrade: (String) -> Unit
+    onSizeTrade: (String) -> Unit,
+    inAppFallbackEnabled: Boolean = true
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -102,6 +107,26 @@ fun ArticleDetailScreen(
     var isDownloadingOffline by remember { mutableStateOf(false) }
     var articleTags by remember { mutableStateOf(emptyList<String>()) }
     var tagDraft by remember { mutableStateOf("") }
+    var extractionFailed by remember { mutableStateOf(false) }
+    var browserUnavailable by remember { mutableStateOf(false) }
+    var downloadFailure by remember { mutableStateOf<String?>(null) }
+    var overflowExpanded by remember { mutableStateOf(false) }
+    var fallbackWebView by remember { mutableStateOf<WebView?>(null) }
+    var fallbackCanGoBack by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = fallbackCanGoBack && fallbackWebView?.canGoBack() == true) {
+        fallbackWebView?.goBack()
+    }
+
+    fun openInBrowser(article: Article) {
+        val intent = CustomTabsIntent.Builder().build()
+        if (intent.intent.resolveActivity(context.packageManager) != null) {
+            intent.launchUrl(context, Uri.parse(article.url))
+            browserUnavailable = false
+        } else {
+            browserUnavailable = true
+        }
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/markdown")
@@ -119,6 +144,10 @@ fun ArticleDetailScreen(
     }
 
     LaunchedEffect(articleId) {
+        article = null
+        articleBody = null
+        extractionFailed = false
+        isLoadingBody = true
         val entity = articleDao.getById(articleId)
         article = entity?.toDomain()
         isBookmarked = bookmarkDao.isBookmarked(articleId)
@@ -130,14 +159,17 @@ fun ArticleDetailScreen(
         if (cached != null) {
             articleBody = cached
         } else {
-            isLoadingBody = true
             val res = newsRepository.extractArticleBody(articleId)
             articleBody = res.getOrNull()
-            isLoadingBody = false
+            extractionFailed = res.isFailure
         }
+        isLoadingBody = false
     }
 
     val currentArticle = article
+    val loadState = currentArticle?.let {
+        articleLoadState(it, articleBody, isLoadingBody, extractionFailed)
+    }
 
     Scaffold(
         topBar = {
@@ -160,61 +192,32 @@ fun ArticleDetailScreen(
                 },
                 actions = {
                     currentArticle?.let { art ->
-                        // Export .md
-                        IconButton(onClick = {
-                            val slug = art.title.lowercase()
-                                .replace(Regex("[^a-z0-9]+"), "-")
-                                .trim('-')
-                                .take(40)
-                            exportLauncher.launch("$slug.md")
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.FileDownload,
-                                contentDescription = "Export Markdown",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
+                        IconButton(onClick = { overflowExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Article options")
                         }
-
-                        // Share
-                        IconButton(onClick = {
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_SUBJECT, art.title)
-                                putExtra(Intent.EXTRA_TEXT, "${art.title}\n${art.url}")
-                            }
-                            context.startActivity(Intent.createChooser(intent, "Share Article"))
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Share,
-                                contentDescription = "Share",
-                                tint = MaterialTheme.colorScheme.onSurface
+                        DropdownMenu(
+                            expanded = overflowExpanded,
+                            onDismissRequest = { overflowExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Open in browser") },
+                                leadingIcon = { Icon(Icons.Default.OpenInBrowser, contentDescription = null) },
+                                onClick = {
+                                    overflowExpanded = false
+                                    openInBrowser(art)
+                                }
                             )
-                        }
-
-                        // Bookmark
-                        IconButton(onClick = {
-                            coroutineScope.launch {
-                                val nextState = !isBookmarked
-                                newsRepository.setBookmarked(art.id, nextState)
-                                isBookmarked = nextState
-                            }
-                        }) {
-                            Icon(
-                                imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                contentDescription = "Bookmark",
-                                tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        // Open in Chrome Custom Tabs
-                        IconButton(onClick = {
-                            val customTabsIntent = CustomTabsIntent.Builder().build()
-                            customTabsIntent.launchUrl(context, Uri.parse(art.url))
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.OpenInBrowser,
-                                contentDescription = "View original",
-                                tint = MaterialTheme.colorScheme.onSurface
+                            DropdownMenuItem(
+                                text = { Text("Export Markdown") },
+                                leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
+                                onClick = {
+                                    overflowExpanded = false
+                                    val slug = art.title.lowercase()
+                                        .replace(Regex("[^a-z0-9]+"), "-")
+                                        .trim('-')
+                                        .take(40)
+                                    exportLauncher.launch("$slug.md")
+                                }
                             )
                         }
                     }
@@ -223,6 +226,71 @@ fun ArticleDetailScreen(
                     containerColor = MaterialTheme.colorScheme.background
                 )
             )
+        },
+        bottomBar = {
+            currentArticle?.let { art ->
+                Surface(color = MaterialTheme.colorScheme.surface) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = {
+                            coroutineScope.launch {
+                                val nextState = !isBookmarked
+                                newsRepository.setBookmarked(art.id, nextState)
+                                isBookmarked = nextState
+                            }
+                        }) {
+                            Icon(
+                                if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = if (isBookmarked) "Remove saved story" else "Save story",
+                                tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        IconButton(onClick = {
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, art.title)
+                                putExtra(Intent.EXTRA_TEXT, "${art.title}\n${art.url}")
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Share Article"))
+                        }) {
+                            Icon(Icons.Default.Share, contentDescription = "Share article")
+                        }
+                        Button(
+                            enabled = !isDownloaded && !isDownloadingOffline,
+                            onClick = {
+                                if (!isDownloadingOffline && !isDownloaded) {
+                                    isDownloadingOffline = true
+                                    coroutineScope.launch {
+                                        val result = newsRepository.download(art.id)
+                                        when (result) {
+                                            is app.marketbrief.core.data.DownloadResult.Success -> {
+                                                isDownloaded = true
+                                                downloadFailure = null
+                                            }
+                                            is app.marketbrief.core.data.DownloadResult.Failure -> {
+                                                downloadFailure = result.message
+                                            }
+                                        }
+                                        isDownloadingOffline = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            if (isDownloadingOffline) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(if (isDownloaded) Icons.Default.Check else Icons.Default.Download, contentDescription = null)
+                                Spacer(modifier = Modifier.size(6.dp))
+                                Text(if (isDownloaded) "Downloaded" else "Download")
+                            }
+                        }
+                    }
+                }
+            }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
@@ -348,55 +416,73 @@ fun ArticleDetailScreen(
                 AppleHairlineDivider()
 
                 // Body Section
-                if (isLoadingBody) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
+                when (val state = loadState) {
+                    ArticleLoadState.Loading -> Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "Extracting full story for reader mode...",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        Text("Extracting full story for reader mode...", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                } else {
-                    val body = articleBody
-                    if (body != null) {
-                        val reason = body.failureReason
-                        if (body.kind != "FULL" && reason != null) {
+                    is ArticleLoadState.Full -> MarkdownArticleBody(markdown = state.markdown)
+                    is ArticleLoadState.Preview -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             AppleBanner(
-                                message = "Full text unavailable (${reason.lowercase()}). Showing summary preview.",
-                                isWarning = false,
-                                actionLabel = "Open on Web",
-                                onAction = {
-                                    val customTabsIntent = CustomTabsIntent.Builder().build()
-                                    customTabsIntent.launchUrl(context, Uri.parse(currentArticle.url))
-                                }
+                                message = "Couldn't load the full text. Showing the available preview.",
+                                isWarning = false
                             )
+                            MarkdownArticleBody(markdown = state.summary)
+                            if (inAppFallbackEnabled) {
+                                ArticleWebFallback(
+                                    url = currentArticle.url,
+                                    onExternalLinkUnavailable = { browserUnavailable = true },
+                                    onWebViewChanged = { fallbackWebView = it },
+                                    onCanGoBackChanged = { fallbackCanGoBack = it }
+                                )
+                            } else {
+                                TextButton(onClick = { openInBrowser(currentArticle) }) { Text("Open original page in browser") }
+                            }
                         }
-
-                        MarkdownArticleBody(markdown = body.markdown)
-                    } else {
-                        Text(
-                            text = currentArticle.summary,
-                            fontSize = 16.sp,
-                            lineHeight = 25.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
                     }
+                    is ArticleLoadState.Failed -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            AppleBanner(
+                                message = "Couldn't load the full text or a preview.",
+                                isWarning = true
+                            )
+                            if (inAppFallbackEnabled) {
+                                ArticleWebFallback(
+                                    url = currentArticle.url,
+                                    onExternalLinkUnavailable = { browserUnavailable = true },
+                                    onWebViewChanged = { fallbackWebView = it },
+                                    onCanGoBackChanged = { fallbackCanGoBack = it }
+                                )
+                            } else {
+                                TextButton(onClick = { openInBrowser(currentArticle) }) { Text("Open original page in browser") }
+                            }
+                        }
+                    }
+                    null -> Unit
+                }
+                if (browserUnavailable) {
+                    Text(
+                        "No browser is available to open this page.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                downloadFailure?.let {
+                    Text("Offline download failed: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Bottom Action Buttons: Offline Save & Position Sizing
+                val symbol = currentArticle.relatedSymbols.firstOrNull() ?: "EURUSD"
+                Button(onClick = { onSizeTrade(symbol) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(100.dp)) {
+                    Text("Size $symbol")
+                }
+
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     articleTags.forEach { tag ->
                         Text(tag, modifier = Modifier.clickable {
@@ -408,67 +494,6 @@ fun ArticleDetailScreen(
                         val tag = tagDraft.trim()
                         if (tag.isNotBlank()) coroutineScope.launch { newsRepository.setArticleTag(currentArticle.id, tag, true); articleTags = (articleTags + tag).distinct(); tagDraft = "" }
                     }) { Text("Add") }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            if (!isDownloaded && !isDownloadingOffline) {
-                                isDownloadingOffline = true
-                                coroutineScope.launch {
-                                    newsRepository.download(currentArticle.id)
-                                    isDownloaded = true
-                                    isDownloadingOffline = false
-                                }
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isDownloaded) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        shape = RoundedCornerShape(100.dp)
-                    ) {
-                        if (isDownloadingOffline) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        } else {
-                            Icon(
-                                imageVector = if (isDownloaded) Icons.Default.Check else Icons.Default.Download,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = if (isDownloaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.size(6.dp))
-                            Text(
-                                text = if (isDownloaded) "Downloaded" else "Download Offline",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-
-                    val symbol = currentArticle.relatedSymbols.firstOrNull() ?: "EURUSD"
-                    Button(
-                        onClick = { onSizeTrade(symbol) },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(100.dp)
-                    ) {
-                        Text(
-                            text = "Size $symbol",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))

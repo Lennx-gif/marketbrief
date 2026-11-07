@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.currentBackStackEntryAsState
 import app.marketbrief.core.storage.db.ArticleDao
 import app.marketbrief.core.storage.db.BookmarkDao
@@ -42,6 +43,7 @@ interface AppNavHostEntryPoint {
     fun bookmarkDao(): BookmarkDao
     fun downloadDao(): DownloadDao
     fun newsRepository(): app.marketbrief.core.data.NewsRepository
+    fun userPrefsRepository(): app.marketbrief.core.storage.UserPrefsRepository
 }
 
 @Composable
@@ -118,6 +120,8 @@ fun AppNavHost(
                         AppNavHostEntryPoint::class.java
                     )
                 }
+                val inAppFallbackEnabled by entryPoint.userPrefsRepository().inAppArticleFallback
+                    .collectAsStateWithLifecycle(initialValue = true)
                 ArticleDetailScreen(
                     articleId = articleId,
                     articleDao = entryPoint.articleDao(),
@@ -127,12 +131,17 @@ fun AppNavHost(
                     onBack = { navController.popBackStack() },
                     onSizeTrade = { symbol ->
                         navController.navigate("calculator?symbol=$symbol")
-                    }
+                    },
+                    inAppFallbackEnabled = inAppFallbackEnabled
                 )
             }
             composable("settings") {
                 SettingsScreen(
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    versionName = BuildConfig.VERSION_NAME,
+                    versionCode = BuildConfig.VERSION_CODE,
+                    flavorName = BuildConfig.FLAVOR,
+                    twelveDataKeyConfigured = BuildConfig.TWELVE_DATA_API_KEY.isNotBlank()
                 )
             }
             composable(

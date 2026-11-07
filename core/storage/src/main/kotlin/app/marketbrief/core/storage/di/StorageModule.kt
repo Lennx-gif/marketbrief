@@ -20,6 +20,8 @@ import app.marketbrief.core.storage.db.MarketBriefDatabase
 import app.marketbrief.core.storage.db.MIGRATION_2_3
 import app.marketbrief.core.storage.db.MIGRATION_3_4
 import app.marketbrief.core.storage.db.MIGRATION_4_5
+import app.marketbrief.core.storage.db.MIGRATION_5_6
+import app.marketbrief.core.storage.db.MIGRATION_6_7
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -34,8 +36,13 @@ private val Context.storageDataStore: DataStore<Preferences> by preferencesDataS
 object StorageModule {
 
     @Provides @Singleton
-    fun provideJournalSetupWriter(dao: app.marketbrief.core.storage.db.JournalDao, articles: ArticleDao): JournalSetupWriter =
-        RoomJournalSetupWriter(dao, articles)
+    fun provideJournalSetupWriter(
+        dao: app.marketbrief.core.storage.db.JournalDao,
+        articles: ArticleDao,
+        accounts: app.marketbrief.core.storage.db.JournalAccountDao,
+        setups: app.marketbrief.core.storage.db.TradeSetupDao,
+        prefs: UserPrefsRepository
+    ): JournalSetupWriter = RoomJournalSetupWriter(dao, articles, accounts, setups, prefs)
 
     @Provides @Singleton
     fun provideEconomicCalendarProvider(dao: app.marketbrief.core.storage.db.CalendarDao): EconomicCalendarProvider = RoomEconomicCalendarProvider(dao)
@@ -53,7 +60,7 @@ object StorageModule {
             MarketBriefDatabase::class.java,
             "marketbrief.db"
         )
-            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .build()
     }
 
@@ -84,6 +91,11 @@ object StorageModule {
     @Provides fun provideArticleSearchDao(database: MarketBriefDatabase): app.marketbrief.core.storage.db.ArticleSearchDao = database.articleSearchDao()
     @Provides fun provideSourcePrefDao(database: MarketBriefDatabase): app.marketbrief.core.storage.db.SourcePrefDao = database.sourcePrefDao()
     @Provides fun provideRateCacheDao(database: MarketBriefDatabase): app.marketbrief.core.storage.db.RateCacheDao = database.rateCacheDao()
+    @Provides fun provideWatchlistDao(database: MarketBriefDatabase): app.marketbrief.core.storage.db.WatchlistDao = database.watchlistDao()
+    @Provides fun provideJournalAccountDao(database: MarketBriefDatabase): app.marketbrief.core.storage.db.JournalAccountDao = database.journalAccountDao()
+    @Provides fun provideTradeSetupDao(database: MarketBriefDatabase): app.marketbrief.core.storage.db.TradeSetupDao = database.tradeSetupDao()
+    @Provides fun provideDailyEntryDao(database: MarketBriefDatabase): app.marketbrief.core.storage.db.DailyEntryDao = database.dailyEntryDao()
+    @Provides fun provideJournalAttachmentDao(database: MarketBriefDatabase): app.marketbrief.core.storage.db.JournalAttachmentDao = database.journalAttachmentDao()
     @Provides fun provideArticleTagDao(database: MarketBriefDatabase): app.marketbrief.core.storage.db.ArticleTagDao = database.articleTagDao()
 
     @Provides

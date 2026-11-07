@@ -90,12 +90,86 @@ interface JournalDao {
     @Query("SELECT * FROM journal_entries ORDER BY createdAt DESC") fun observeEntries(): Flow<List<JournalEntryEntity>>
     @Query("SELECT * FROM journal_entries WHERE id = :id") suspend fun getEntry(id: String): JournalEntryEntity?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertEntry(entry: JournalEntryEntity)
+    @Query("DELETE FROM journal_entries WHERE id = :id") suspend fun deleteEntry(id: String)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun addHeadlines(items: List<JournalHeadlineEntity>)
+    @Query("SELECT * FROM journal_headlines ORDER BY entryId")
+    fun observeHeadlines(): Flow<List<JournalHeadlineEntity>>
     @Query("SELECT * FROM journal_headlines WHERE entryId = :entryId") suspend fun headlines(entryId: String): List<JournalHeadlineEntity>
+    @Query("DELETE FROM journal_headlines WHERE entryId = :entryId")
+    suspend fun deleteHeadlines(entryId: String)
     @Query("SELECT * FROM journal_entries WHERE status = 'CLOSED' ORDER BY closedAt") suspend fun closedEntries(): List<JournalEntryEntity>
     @Query("SELECT * FROM journal_entries WHERE status = 'OPEN'") suspend fun openEntries(): List<JournalEntryEntity>
     @Query("SELECT * FROM account_settings WHERE id = 1") fun observeAccount(): Flow<AccountSettingsEntity?>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveAccount(settings: AccountSettingsEntity)
+}
+
+@Dao
+interface JournalAccountDao {
+    @Query("SELECT * FROM journal_accounts ORDER BY createdAt")
+    fun observeAll(): Flow<List<JournalAccountEntity>>
+
+    @Query("SELECT * FROM journal_accounts WHERE archived = 0 ORDER BY createdAt")
+    fun observeActive(): Flow<List<JournalAccountEntity>>
+
+    @Query("SELECT * FROM journal_accounts WHERE id = :id")
+    suspend fun get(id: Long): JournalAccountEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(account: JournalAccountEntity): Long
+
+    @Query("UPDATE journal_accounts SET archived = 1 WHERE id = :id")
+    suspend fun archive(id: Long)
+}
+
+@Dao
+interface TradeSetupDao {
+    @Query("SELECT * FROM trade_setups ORDER BY name")
+    fun observeAll(): Flow<List<TradeSetupEntity>>
+
+    @Query("SELECT * FROM trade_setups WHERE archived = 0 ORDER BY name")
+    fun observeActive(): Flow<List<TradeSetupEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(setup: TradeSetupEntity)
+
+    @Query("UPDATE trade_setups SET archived = 1 WHERE id = :id")
+    suspend fun archive(id: String)
+}
+
+@Dao
+interface DailyEntryDao {
+    @Query("SELECT * FROM daily_entries ORDER BY date DESC")
+    fun observeAll(): Flow<List<DailyEntryEntity>>
+
+    @Query("SELECT * FROM daily_entries WHERE date = :date LIMIT 1")
+    suspend fun getByDate(date: String): DailyEntryEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: DailyEntryEntity)
+
+    @Query("DELETE FROM daily_entries WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+@Dao
+interface JournalAttachmentDao {
+    @Query("SELECT * FROM journal_attachments ORDER BY createdAt")
+    fun observeAll(): Flow<List<JournalAttachmentEntity>>
+
+    @Query("SELECT * FROM journal_attachments WHERE ownerType = :ownerType AND ownerId = :ownerId ORDER BY createdAt")
+    suspend fun forOwner(ownerType: String, ownerId: String): List<JournalAttachmentEntity>
+
+    @Query("SELECT * FROM journal_attachments WHERE ownerType = :ownerType AND ownerId = :ownerId ORDER BY createdAt")
+    fun observeForOwner(ownerType: String, ownerId: String): Flow<List<JournalAttachmentEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun add(attachment: JournalAttachmentEntity)
+
+    @Query("SELECT COUNT(*) FROM journal_attachments WHERE ownerType = :ownerType AND ownerId = :ownerId")
+    suspend fun countForOwner(ownerType: String, ownerId: String): Int
+
+    @Query("DELETE FROM journal_attachments WHERE id = :id")
+    suspend fun delete(id: String)
 }
 
 @Dao
@@ -144,6 +218,24 @@ interface ArticleTagDao {
 interface RateCacheDao {
     @Query("SELECT * FROM rate_cache") fun observeAll(): Flow<List<RateCacheEntity>>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveAll(rates: List<RateCacheEntity>)
+}
+
+@Dao
+interface WatchlistDao {
+    @Query("SELECT * FROM watchlist_items ORDER BY position, addedAt")
+    fun observeAll(): Flow<List<WatchlistItemEntity>>
+
+    @Query("SELECT * FROM watchlist_items ORDER BY position, addedAt")
+    suspend fun all(): List<WatchlistItemEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(items: List<WatchlistItemEntity>)
+
+    @Query("DELETE FROM watchlist_items WHERE symbol = :symbol")
+    suspend fun delete(symbol: String)
+
+    @Query("DELETE FROM watchlist_items")
+    suspend fun clear()
 }
 
 @Dao

@@ -128,7 +128,7 @@ data class TradeLogEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "journal_entries")
+@Entity(tableName = "journal_entries", indices = [Index(value = ["accountId"])])
 data class JournalEntryEntity(
     @PrimaryKey val id: String,
     val createdAt: Long,
@@ -150,7 +150,10 @@ data class JournalEntryEntity(
     val pnl: String?,
     val rMultiple: String?,
     val notes: String,
-    val tags: String
+    val tags: String,
+    val accountId: Long = 1L,
+    val setupId: String? = null,
+    val checklistResult: String = ""
 )
 
 @Entity(tableName = "journal_headlines", primaryKeys = ["entryId", "articleId"])
@@ -172,6 +175,57 @@ data class AccountSettingsEntity(
     val maxDrawdownPercent: String,
     val drawdownMode: String,
     val resetTimezone: String
+)
+
+@Entity(tableName = "journal_accounts")
+data class JournalAccountEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val type: String,
+    val currency: String,
+    val startingBalance: String,
+    val maxRiskPerTradePercent: String,
+    val dailyLossLimitPercent: String,
+    val maxOpenRiskPercent: String,
+    val maxDrawdownPercent: String,
+    val drawdownMode: String,
+    val resetTimezone: String,
+    val createdAt: Long,
+    val archived: Boolean = false
+)
+
+@Entity(tableName = "trade_setups")
+data class TradeSetupEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val description: String,
+    val tags: String,
+    val checklist: String,
+    val color: String,
+    val archived: Boolean = false,
+    val createdAt: Long
+)
+
+@Entity(tableName = "daily_entries", indices = [Index(value = ["date"], unique = true)])
+data class DailyEntryEntity(
+    @PrimaryKey val id: String,
+    val accountId: Long?,
+    val date: String,
+    val planFollowed: Boolean?,
+    val mood: String,
+    val energy: Int?,
+    val notes: String,
+    val lessons: String,
+    val tags: String
+)
+
+@Entity(tableName = "journal_attachments")
+data class JournalAttachmentEntity(
+    @PrimaryKey val id: String,
+    val ownerType: String,
+    val ownerId: String,
+    val filePath: String,
+    val createdAt: Long
 )
 
 @Entity(tableName = "calendar_events")
@@ -204,6 +258,14 @@ data class SourcePrefEntity(@PrimaryKey val sourceName: String, val weight: Stri
 
 @Entity(tableName = "rate_cache")
 data class RateCacheEntity(@PrimaryKey val currencyPair: String, val rate: String, val updatedAt: Long)
+
+@Entity(tableName = "watchlist_items")
+data class WatchlistItemEntity(
+    @PrimaryKey val symbol: String,
+    val assetClass: String,
+    val position: Int,
+    val addedAt: Long
+)
 
 @Fts4
 @Entity(tableName = "article_fts")

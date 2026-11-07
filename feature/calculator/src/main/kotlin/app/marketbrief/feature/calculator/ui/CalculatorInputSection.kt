@@ -1,6 +1,7 @@
 package app.marketbrief.feature.calculator.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,16 +42,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.marketbrief.core.risk.AssetClass
 import app.marketbrief.core.risk.Direction
 import app.marketbrief.core.risk.Instrument
+import app.marketbrief.core.risk.RiskConverter
 import app.marketbrief.core.ui.components.AppleGroupedSection
 import app.marketbrief.core.ui.components.AppleHairlineDivider
 import app.marketbrief.core.ui.components.ApplePillChip
 import app.marketbrief.core.ui.components.AppleSegmentedControl
+import app.marketbrief.core.ui.components.LabeledSegmentedRow
 import app.marketbrief.core.ui.theme.MarketBriefTheme
+import java.math.BigDecimal
 
 @Composable
 fun InstrumentPicker(
@@ -292,56 +297,136 @@ fun CalculatorInputSection(
                 )
 
                 // Direction: Long / Short
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Trade Direction",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    AppleSegmentedControl(
-                        items = listOf(Direction.LONG, Direction.SHORT),
-                        selectedItem = uiState.direction,
-                        onItemSelected = onDirectionChange,
-                        labelProvider = { if (it == Direction.LONG) "Long (Buy)" else "Short (Sell)" }
-                    )
-                }
+                LabeledSegmentedRow(
+                    label = "Trade Direction",
+                    options = listOf(Direction.LONG, Direction.SHORT),
+                    selected = uiState.direction,
+                    onSelect = onDirectionChange,
+                    labelProvider = { if (it == Direction.LONG) "Long" else "Short" }
+                )
 
                 AppleHairlineDivider()
 
                 // Risk Model
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Risk Sizing Mode",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    AppleSegmentedControl(
-                        items = listOf(true, false),
-                        selectedItem = uiState.riskIsPercent,
-                        onItemSelected = onRiskTypeChange,
-                        labelProvider = { if (it) "% of Balance" else "Cash Amount" }
-                    )
+                LabeledSegmentedRow(
+                    label = "Risk Sizing Mode",
+                    options = listOf(true, false),
+                    selected = uiState.riskIsPercent,
+                    onSelect = onRiskTypeChange,
+                    labelProvider = { if (it) "Percent" else "Cash" }
+                )
+
+                val balanceVal = remember(uiState.balanceText) {
+                    try { BigDecimal(uiState.balanceText.trim()) } catch (_: Exception) { null }
+                }
+                val riskVal = remember(uiState.riskValueText) {
+                    try { BigDecimal(uiState.riskValueText.trim()) } catch (_: Exception) { null }
                 }
 
-                OutlinedTextField(
-                    value = uiState.riskValueText,
-                    onValueChange = onRiskValueChange,
-                    label = { Text(if (uiState.riskIsPercent) "Risk % (e.g. 1.0)" else "Cash at Risk (${uiState.accountCurrencyText})") },
+                val derivedCash = remember(balanceVal, riskVal, uiState.riskIsPercent) {
+                    if (uiState.riskIsPercent) RiskConverter.percentToCash(balanceVal, riskVal) else null
+                }
+                val derivedPercent = remember(balanceVal, riskVal, uiState.riskIsPercent) {
+                    if (!uiState.riskIsPercent) RiskConverter.cashToPercent(balanceVal, riskVal) else null
+                }
+
+                val isHighRisk = remember(riskVal, derivedPercent, uiState.riskIsPercent) {
+                    if (uiState.riskIsPercent) RiskConverter.isHighRisk(riskVal) else RiskConverter.isHighRisk(derivedPercent)
+                }
+
+                val supportingLiveLine = when {
+                    balanceVal == null || balanceVal <= BigDecimal.ZERO -> "Enter account balance to compute equivalent risk"
+                    uiState.riskIsPercent -> if (derivedCash != null) "= ${derivedCash.toPlainString()} ${uiState.accountCurrencyText} at risk" else "Enter valid risk percent"
+                    else -> if (derivedPercent != null) "= ${derivedPercent.toPlainString()}% of balance" else "Enter valid risk amount"
+                }
+
+                // Dual-field risk row with equal baselines
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(10.dp)
-                )
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = uiState.riskValueText,
+                        onValueChange = onRiskValueChange,
+                        label = { Text(if (uiState.riskIsPercent) "Risk %" else "Cash Risk") },
+                        trailingIcon = {
+                            Text(
+                                text = if (uiState.riskIsPercent) "%" else uiState.accountCurrencyText,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(end = 12.dp)
+                            )
+                        },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(10.dp),
+                        isError = isHighRisk
+                    )
+
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .border(
+                                0.5.dp,
+                                if (isHighRisk) MaterialTheme.colorScheme.error.copy(alpha = 0.5f) else MarketBriefTheme.colors.hairline,
+                                RoundedCornerShape(10.dp)
+                            ),
+                        color = MarketBriefTheme.colors.subtlePill,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = if (uiState.riskIsPercent) "Cash Equivalent" else "% Equivalent",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = if (uiState.riskIsPercent) {
+                                    if (derivedCash != null) "${derivedCash.toPlainString()} ${uiState.accountCurrencyText}" else "—"
+                                } else {
+                                    if (derivedPercent != null) "${derivedPercent.toPlainString()}%" else "—"
+                                },
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isHighRisk) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = supportingLiveLine,
+                        fontSize = 12.sp,
+                        color = if (isHighRisk) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (isHighRisk) {
+                        Text(
+                            text = "High Risk (> 5%)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             }
         }
 
