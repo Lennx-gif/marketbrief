@@ -48,4 +48,10 @@ class StorageTest {
         assertNotNull(UserPrefsRepository.KEY_THEME_MODE)
         assertNotNull(UserPrefsRepository.KEY_BUDGET_COUNT)
     }
+
+    @Test
+    fun testOnboardingPreferenceKeys() {
+        assertEquals("has_completed_onboarding", UserPrefsRepository.KEY_HAS_COMPLETED_ONBOARDING.name)
+        assertEquals("preferred_categories", UserPrefsRepository.KEY_PREFERRED_CATEGORIES.name)
+    }
 }

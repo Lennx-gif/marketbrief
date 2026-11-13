@@ -55,174 +55,190 @@ fun ArticleCard(
     relatedQuote: Quote? = null,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFF161B1E)
     ) {
-        article.imageUrl?.takeIf { it.isNotBlank() }?.let { imageUrl ->
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(14.dp)),
-                contentScale = ContentScale.Crop
-            )
-        }
-
-        // Category (teal), relative time, region and sentiment tags
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                text = article.categories.firstOrNull() ?: "News",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = formatRelativeTime(article.publishedAt),
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            article.region?.let { region ->
-                Surface(shape = RoundedCornerShape(4.dp), color = MarketBriefTheme.colors.subtlePill) {
-                    Text(
-                        text = region,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-            }
-            article.sentiment?.let { score ->
-                val color = when {
-                    score >= 0.15f -> MarketBriefTheme.colors.bullish
-                    score <= -0.15f -> MarketBriefTheme.colors.bearish
-                    else -> MarketBriefTheme.colors.neutral
-                }
-                val label = when {
-                    score >= 0.15f -> "Bullish"
-                    score <= -0.15f -> "Bearish"
-                    else -> "Neutral"
-                }
-                Surface(shape = RoundedCornerShape(4.dp), color = color.copy(alpha = 0.15f)) {
-                    Text(
-                        text = label,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false,
-                        color = color,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-            }
-        }
-
-        Text(
-            text = article.title,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Bold,
-            lineHeight = 22.sp,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        if (article.summary.isNotBlank()) {
-            Text(
-                text = article.summary,
-                fontSize = 14.sp,
-                lineHeight = 19.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        relatedQuote?.let { quote ->
-            RelatedSymbolChip(symbol = quote.assetId.symbol, quote = quote)
-        }
-
-        // Source row with actions
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier.weight(1f, fill = false),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                SourceAvatar(name = article.sourceName, size = 20)
-                Text(
-                    text = article.sourceName,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                val symbol = article.relatedSymbols.firstOrNull() ?: "EURUSD"
-                Surface(
+            article.imageUrl?.takeIf { it.isNotBlank() }?.let { imageUrl ->
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(100.dp))
-                        .clickable { onSizeTrade(symbol) },
-                    shape = RoundedCornerShape(100.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Text(
-                        text = "Size $symbol",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            // Category (teal), relative time, region and sentiment tags
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = article.categories.firstOrNull() ?: "News",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF5CE1E6)
+                )
+                Text(
+                    text = formatRelativeTime(article.publishedAt),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                article.region?.let { region ->
+                    Surface(shape = RoundedCornerShape(4.dp), color = MarketBriefTheme.colors.subtlePill) {
+                        Text(
+                            text = region,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                article.sentiment?.let { score ->
+                    val color = when {
+                        score >= 0.15f -> MarketBriefTheme.colors.bullish
+                        score <= -0.15f -> MarketBriefTheme.colors.bearish
+                        else -> MarketBriefTheme.colors.neutral
+                    }
+                    val label = when {
+                        score >= 0.15f -> "Bullish"
+                        score <= -0.15f -> "Bearish"
+                        else -> "Neutral"
+                    }
+                    Surface(shape = RoundedCornerShape(4.dp), color = color.copy(alpha = 0.15f)) {
+                        Text(
+                            text = label,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
+                            color = color,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        imageVector = if (isDownloaded) Icons.Default.Check else Icons.Default.Download,
-                        contentDescription = "Download",
-                        tint = if (isDownloaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
+            Text(
+                text = article.title,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 22.sp,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            if (article.summary.isNotBlank()) {
+                Text(
+                    text = article.summary,
+                    fontSize = 14.sp,
+                    lineHeight = 19.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            relatedQuote?.let { quote ->
+                RelatedSymbolChip(symbol = quote.assetId.symbol, quote = quote)
+            }
+
+            // Source row with actions
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SourceAvatar(name = article.sourceName, size = 24)
+                    Text(
+                        text = "${article.sourceName} · ${formatRelativeTime(article.publishedAt)}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                 }
-                IconButton(onClick = onShare, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Share",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(17.dp)
-                    )
-                }
-                IconButton(onClick = onBookmarkToggle, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                        contentDescription = "Bookmark",
-                        tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(19.dp)
-                    )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val symbol = article.relatedSymbols.firstOrNull() ?: "EURUSD"
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(100.dp))
+                            .clickable { onSizeTrade(symbol) },
+                        shape = RoundedCornerShape(100.dp),
+                        color = Color(0xFF1F4E52)
+                    ) {
+                        Text(
+                            text = "Size $symbol",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF5CE1E6),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .clickable(onClick = onShare),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Share",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .clickable(onClick = onBookmarkToggle),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            contentDescription = "Bookmark",
+                            tint = if (isBookmarked) Color(0xFF5CE1E6) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    }
                 }
             }
         }
-
-        AppleHairlineDivider(modifier = Modifier.padding(top = 4.dp))
     }
 }
 

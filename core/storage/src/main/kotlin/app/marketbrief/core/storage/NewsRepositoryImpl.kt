@@ -222,11 +222,28 @@ class NewsRepositoryImpl @Inject constructor(
         DownloadResult.Success(articleId = articleId, isFullText = (body.kind == "FULL"))
     }
 
+    override suspend fun getArticleById(articleId: String): Article? = withContext(Dispatchers.IO) {
+        articleDao.getById(articleId)?.toDomain()
+    }
+
+    override suspend fun isBookmarked(articleId: String): Boolean = withContext(Dispatchers.IO) {
+        bookmarkDao.isBookmarked(articleId)
+    }
+
+    override suspend fun isDownloaded(articleId: String): Boolean = withContext(Dispatchers.IO) {
+        downloadDao.getDownload(articleId) != null
+    }
+
     override suspend fun search(query: String): List<Article> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
         val safe = FtsQuerySanitizer.prefixQuery(query) ?: return@withContext emptyList()
         val savedIds = bookmarkDao.observeBookmarkIds().first().toSet()
-        val ids = (articleSearchDao.searchArticles(safe) + articleSearchDao.searchBodies(safe)).toSet().intersect(savedIds)
+        // FTS4 still rejects some MATCH shapes; degrade to a LIKE scan instead of crashing.
+        val ids = try {
+            (articleSearchDao.searchArticles(safe) + articleSearchDao.searchBodies(safe)).toSet()
+        } catch (_: Exception) {
+            articleDao.search(query.trim()).map { it.id }.toSet()
+        }.intersect(savedIds)
         ids.mapNotNull { articleDao.getById(it)?.toDomain() }
     }
 

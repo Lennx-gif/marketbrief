@@ -3,6 +3,7 @@ package app.marketbrief.feature.calculator
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -107,12 +108,14 @@ fun CalculatorScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Position Calculator",
+                    text = "Position Sizer",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.5).sp,
@@ -124,14 +127,6 @@ fun CalculatorScreen(
                     onClick = onOpenJournal
                 )
             }
-
-            Text(
-                text = "Position Sizer",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.8).sp,
-                color = MaterialTheme.colorScheme.onBackground
-            )
 
             if (presets.isNotEmpty()) {
                 PresetsSection(
@@ -220,6 +215,8 @@ fun CalculatorScreen(
                     onDelete = { viewModel.deleteLogEntry(it) }
                 )
             }
+
+            Spacer(modifier = Modifier.height(88.dp))
         }
     }
 }

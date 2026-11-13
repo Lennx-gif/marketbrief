@@ -27,8 +27,10 @@ interface EconomicCalendarProvider {
 
 object FtsQuerySanitizer {
     fun prefixQuery(input: String): String? {
+        // FTS4 query grammar only tolerates letters, digits and '_' inside a term;
+        // operators like '-' (NOT) or parens make the MATCH expression malformed.
         val safe = input.trim().split(Regex("\\s+"))
-            .map { it.replace(Regex("[^\\p{L}\\p{N}_-]"), "") }
+            .map { it.replace(Regex("[^\\p{L}\\p{N}_]"), "") }
             .filter { it.isNotBlank() && it.uppercase() !in setOf("AND", "OR", "NOT", "NEAR") }
         return safe.takeIf { it.isNotEmpty() }?.joinToString(" AND ") { "$it*" }
     }

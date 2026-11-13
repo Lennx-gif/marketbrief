@@ -2,6 +2,7 @@ package app.marketbrief.feature.watchlist
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -101,35 +103,29 @@ fun WatchlistScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Apple Minimalist Screen Header
+            // Screen Sub-Header (Integrated under Global Top Bar)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp),
+                    .padding(top = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "Watchlist",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.8).sp,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Text(
-                        text = when {
-                            uiState.lastQuoteUpdatedAt > 0L -> "Prices as of ${formatWatchlistTime(uiState.lastQuoteUpdatedAt)}"
-                            uiState.watchlistItems.isNotEmpty() -> "Prices unavailable"
-                            else -> "No instruments tracked"
-                        },
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Text(
+                    text = when {
+                        uiState.lastQuoteUpdatedAt > 0L -> "Prices as of ${formatWatchlistTime(uiState.lastQuoteUpdatedAt)}"
+                        uiState.watchlistItems.isNotEmpty() -> "Prices unavailable"
+                        else -> "No instruments tracked"
+                    },
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
-                Row {
-                    IconButton(onClick = { viewModel.refresh(manual = true) }) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(
+                        onClick = { viewModel.refresh(manual = true) },
+                        modifier = Modifier.size(44.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Refresh prices",
@@ -138,7 +134,7 @@ fun WatchlistScreen(
                     }
                     IconButton(
                         onClick = { showAddDialog = true },
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
@@ -218,7 +214,7 @@ fun WatchlistScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(88.dp))
         }
     }
 
@@ -299,7 +295,10 @@ fun WatchlistItemRow(
                     text = item.symbol,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
             Row(
@@ -335,7 +334,7 @@ fun WatchlistItemRow(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Column(
                 modifier = Modifier.width(76.dp),
@@ -349,46 +348,68 @@ fun WatchlistItemRow(
                     maxLines = 1
                 )
                 val change = item.changePercent
+                val isZero = change != null && kotlin.math.abs(change) < 0.0001
                 val changeText = when {
                     change == null -> "Change n/a"
+                    isZero -> "0.00%"
                     item.isBullish == true -> "↑ ${String.format(java.util.Locale.US, "%.2f", kotlin.math.abs(change))}%"
                     else -> "↓ ${String.format(java.util.Locale.US, "%.2f", kotlin.math.abs(change))}%"
                 }
                 val changeColor = when {
                     change == null || item.isStale -> MaterialTheme.colorScheme.onSurfaceVariant
-                    item.isBullish == true -> MarketBriefTheme.colors.bullish
-                    else -> MarketBriefTheme.colors.bearish
+                    isZero -> Color(0xFF8E8E93)
+                    item.isBullish == true -> Color(0xFF00E676)
+                    else -> Color(0xFFFF5252)
                 }
                 Text(changeText, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = changeColor, maxLines = 1)
                 if (item.isStale) {
                     Text("Stale", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            IconButton(
-                onClick = onSizeTrade,
-                modifier = Modifier.size(48.dp)
+
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onSizeTrade),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Calculate,
                     contentDescription = "Size in Calculator",
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = Color(0xFF5CE1E6),
                     modifier = Modifier.size(20.dp)
                 )
             }
 
-            IconButton(
-                onClick = onRemove,
-                modifier = Modifier.size(48.dp)
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onAddAlert),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.NotificationsActive,
+                    contentDescription = "Add price alert",
+                    tint = Color(0xFF5CE1E6),
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onRemove),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Remove",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.size(16.dp)
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.size(17.dp)
                 )
-            }
-            IconButton(onClick = onAddAlert, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Default.NotificationsActive, contentDescription = "Add price alert", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             }
         }
     }

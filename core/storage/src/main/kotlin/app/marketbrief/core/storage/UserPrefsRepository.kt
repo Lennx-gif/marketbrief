@@ -44,6 +44,9 @@ class UserPrefsRepository @Inject constructor(
     val showMarketTickerOnFeed: Flow<Boolean> = dataStore.data.map { it[KEY_FEED_TICKER] ?: false }
     val inAppArticleFallback: Flow<Boolean> = dataStore.data.map { it[KEY_IN_APP_ARTICLE_FALLBACK] ?: true }
 
+    val hasCompletedOnboarding: Flow<Boolean> = dataStore.data.map { it[KEY_HAS_COMPLETED_ONBOARDING] ?: false }
+    val preferredCategories: Flow<Set<String>> = dataStore.data.map { it[KEY_PREFERRED_CATEGORIES].orEmpty() }
+
     val watchlistSortOrder: Flow<String> = dataStore.data.map { it[KEY_WATCHLIST_SORT] ?: "MANUAL" }
     val watchlistViewMode: Flow<String> = dataStore.data.map { it[KEY_WATCHLIST_VIEW] ?: "DETAILED" }
     val calendarImpactFilter: Flow<String> = dataStore.data.map { it[KEY_CALENDAR_IMPACT] ?: "ALL" }
@@ -233,6 +236,18 @@ class UserPrefsRepository @Inject constructor(
         }
     }
 
+    suspend fun setPreferredCategories(categories: Set<String>) {
+        dataStore.edit { it[KEY_PREFERRED_CATEGORIES] = categories }
+    }
+
+    suspend fun completeOnboarding() {
+        dataStore.edit { it[KEY_HAS_COMPLETED_ONBOARDING] = true }
+    }
+
+    suspend fun resetOnboarding() {
+        dataStore.edit { it[KEY_HAS_COMPLETED_ONBOARDING] = false }
+    }
+
     companion object {
         const val DAILY_BUDGET_LIMIT = 100
 
@@ -251,6 +266,8 @@ class UserPrefsRepository @Inject constructor(
         val KEY_SHOW_SOURCE_STRIP = booleanPreferencesKey("show_source_strip")
         val KEY_FEED_TICKER = booleanPreferencesKey("show_market_ticker_on_feed")
         val KEY_IN_APP_ARTICLE_FALLBACK = booleanPreferencesKey("in_app_article_fallback")
+        val KEY_HAS_COMPLETED_ONBOARDING = booleanPreferencesKey("has_completed_onboarding")
+        val KEY_PREFERRED_CATEGORIES = stringSetPreferencesKey("preferred_categories")
 
         val KEY_WATCHLIST_SORT = stringPreferencesKey("watchlist_sort")
         val KEY_WATCHLIST_VIEW = stringPreferencesKey("watchlist_view")

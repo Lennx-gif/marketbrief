@@ -53,6 +53,7 @@ class TwelveDataSource(
         val dto: TwelveSearchDto = client.get("$baseUrl/symbol_search") {
             parameter("symbol", query)
             parameter("outputsize", 10)
+            parameter("apikey", apiKey)
         }.body()
         throwIfError(dto.status, dto.code, dto.message)
         dto.data.map { AssetId(it.symbol.replace("/", "").uppercase(), classify(it.type)) }.distinct()

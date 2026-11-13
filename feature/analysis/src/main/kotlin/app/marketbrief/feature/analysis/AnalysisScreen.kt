@@ -93,21 +93,13 @@ fun AnalysisScreenContent(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Screen Title & Mode Segment Selector
+            // Mode Segment Selector (Integrated under Global Top Bar)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
+                    .padding(top = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    text = "Analysis",
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.8).sp,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-
                 AppleSegmentedControl(
                     items = listOf(AnalysisMode.SENTIMENT, AnalysisMode.TECHNICALS),
                     selectedItem = uiState.mode,
@@ -264,7 +256,7 @@ fun SentimentSection(
                     lineHeight = 15.sp
                 )
             }
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(88.dp))
         }
     }
 }
@@ -423,7 +415,7 @@ fun TechnicalsSection(
             }
         }
         item {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(88.dp))
         }
     }
 }

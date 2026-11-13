@@ -40,12 +40,15 @@ data class SettingsUiState(
     val myfxbookMessage: String? = null,
     val lastMarketRefreshEpochMillis: Long = 0L,
     val showMarketTickerOnFeed: Boolean = false,
-    val inAppArticleFallback: Boolean = true
+    val inAppArticleFallback: Boolean = true,
+    val preferredCategories: Set<String> = emptySet()
 )
 
 private data class GeneralPrefs(val country: String, val theme: String, val analysis: String, val digestTime: String, val homeOnly: Boolean, val quietHours: String, val currency: String)
 private data class OperationalPrefs(val wifi: Boolean, val notif: Boolean, val budget: Int, val count: Int, val kenyaLens: Boolean, val twelveRemaining: Int, val myfxbookRemaining: Int)
 private data class BaseOperationalPrefs(val wifi: Boolean, val notif: Boolean, val budget: Int, val count: Int)
+
+private data class ReaderPrefs(val inAppFallback: Boolean, val ticker: Boolean, val lastRefresh: Long, val categories: Set<String>)
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -107,9 +110,10 @@ class SettingsViewModel @Inject constructor(
     private val readerPrefsFlow = combine(
         prefs.inAppArticleFallback,
         prefs.showMarketTickerOnFeed,
-        rateRepository.lastUpdated
-    ) { inAppFallback, ticker, lastRefresh ->
-        Triple(inAppFallback, ticker, lastRefresh)
+        rateRepository.lastUpdated,
+        prefs.preferredCategories
+    ) { inAppFallback, ticker, lastRefresh, categories ->
+        ReaderPrefs(inAppFallback, ticker, lastRefresh, categories)
     }
 
     val uiState: StateFlow<SettingsUiState> = combine(
@@ -139,11 +143,20 @@ class SettingsViewModel @Inject constructor(
             myfxbookConnected = fx.first,
             myfxbookBusy = fx.second,
             myfxbookMessage = fx.third,
-            inAppArticleFallback = reader.first,
-            showMarketTickerOnFeed = reader.second,
-            lastMarketRefreshEpochMillis = reader.third
+            inAppArticleFallback = reader.inAppFallback,
+            showMarketTickerOnFeed = reader.ticker,
+            lastMarketRefreshEpochMillis = reader.lastRefresh,
+            preferredCategories = reader.categories
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiState())
+
+    fun resetOnboarding() {
+        viewModelScope.launch { prefs.resetOnboarding() }
+    }
+
+    fun setPreferredCategories(categories: Set<String>) {
+        viewModelScope.launch { prefs.setPreferredCategories(categories) }
+    }
 
     fun setHomeCountry(country: String) {
         viewModelScope.launch { prefs.setHomeCountry(country) }

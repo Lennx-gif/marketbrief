@@ -45,6 +45,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -80,6 +81,7 @@ fun SettingsScreen(
     versionCode: Int,
     flavorName: String,
     twelveDataKeyConfigured: Boolean,
+    onNavigateToOnboarding: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -189,6 +191,39 @@ fun SettingsScreen(
                         }
                     }
 
+                }
+            }
+
+            item {
+                SettingsSectionHeader(title = "ONBOARDING & PREFERENCES")
+                AppleGroupedSection {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "Preferred Categories",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = if (uiState.preferredCategories.isEmpty()) "All categories prioritized" else uiState.preferredCategories.joinToString(", "),
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = onNavigateToOnboarding,
+                                shape = RoundedCornerShape(20.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                            ) {
+                                Text("Manage Categories", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                            }
+                            TextButton(onClick = {
+                                viewModel.resetOnboarding()
+                                onNavigateToOnboarding()
+                            }) {
+                                Text("Reset Onboarding", fontSize = 13.sp)
+                            }
+                        }
+                    }
                 }
             }
 

@@ -36,21 +36,26 @@ import androidx.compose.ui.unit.sp
 import app.marketbrief.core.model.Article
 import coil.compose.AsyncImage
 
-/** Round avatar with the source's initial. NewsAPI gives no logos, so initials stand in. */
+/** Round avatar with the source's initial. Standardized 24.dp circular monogram badge with 8.dp end spacing. */
 @Composable
 fun SourceAvatar(name: String, size: Int = 24, modifier: Modifier = Modifier) {
+    val initial = androidx.compose.runtime.remember(name) {
+        val cleaned = name.trim().removePrefix("www.").removePrefix("http://").removePrefix("https://")
+        cleaned.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "N"
+    }
     Box(
         modifier = modifier
             .size(size.dp)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primaryContainer),
+            .background(androidx.compose.ui.graphics.Color(0xFF1F4E52)),
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = name.firstOrNull()?.uppercase() ?: "N",
-            fontSize = (size * 0.45f).sp,
+            text = initial,
+            fontSize = (size * 0.46f).sp,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
+            color = androidx.compose.ui.graphics.Color(0xFF5CE1E6),
+            maxLines = 1
         )
     }
 }
@@ -81,27 +86,6 @@ fun SourceStrip(sources: List<String>, modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
-    }
-}
-
-@Composable
-fun SectionHeader(title: String, modifier: Modifier = Modifier, actionLabel: String? = null, onAction: () -> Unit = {}) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(text = title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-        if (actionLabel != null) {
-            Text(
-                text = actionLabel,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.clickable(onClick = onAction)
-            )
         }
     }
 }

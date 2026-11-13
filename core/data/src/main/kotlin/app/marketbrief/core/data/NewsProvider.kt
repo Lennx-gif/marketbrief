@@ -65,6 +65,10 @@ interface NewsRepository {
     fun observeSavedTags(): Flow<List<String>> = kotlinx.coroutines.flow.flowOf(emptyList())
     suspend fun savedArticlesWithTag(tag: String): List<Article> = emptyList()
 
+    suspend fun getArticleById(articleId: String): Article? = null
+    suspend fun isBookmarked(articleId: String): Boolean = false
+    suspend fun isDownloaded(articleId: String): Boolean = false
+
     // Compatibility default delegates
     val articles: Flow<List<Article>>
         get() = observeFeed(FeedQuery())
